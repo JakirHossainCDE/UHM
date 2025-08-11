@@ -45,4 +45,4 @@ If you want to serve it using a local web server (useful for more complex projec
 
 ## Copyright
 © 2025 – Concept by **Amna Azeem** and **Md Jakir Hossain**.  
-Distributed under the [GNU General Public License v3.0](LICENSE). See LICENSE file for details.
+Distributed under the GNU General Public License v3.0.
