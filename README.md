@@ -43,8 +43,6 @@ If you want to serve it using a local web server (useful for more complex projec
 -   **Mapbox**: The mapping platform used to render the heat map and building footprint layers.
 -   **Font Awesome**: For the icons used in the UI.
 
-## Author
-
--   **Jakir** 
-
-This project was built as a final demonstration of web development and mapping skills.
+## Copyright
+© 2025 – Concept by **Amna Azeem** and **Md Jakir Hossain**.  
+Distributed under the [GNU General Public License v3.0](LICENSE). See LICENSE file for details.
