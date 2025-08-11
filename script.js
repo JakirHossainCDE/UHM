@@ -4,6 +4,7 @@ const LAHORE_LON = 74.3587;
 const DEFAULT_ZOOM = 10;
 const DETAIL_ZOOM = 15;
 
+
 // Initialize with Lahore coordinates
 function initializeMap() {
     // Set initial maps to Lahore
@@ -169,4 +170,5 @@ function showLocationMessage(message, type) {
 }
 
 // Initialize the map with Lahore on page load
+
 window.onload = initializeMap;
