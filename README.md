@@ -5,6 +5,9 @@ This project is a dynamic web application for visualizing urban microclimates, s
 
 WebMap: https://jakirhossaincde.github.io/UHM/
 
+<img width="1363" height="678" alt="image" src="https://github.com/user-attachments/assets/bbd21023-f266-4eea-845d-2ce387895aa5" />
+
+
 ## Features
 
 - **Heat Map Visualization**: Displays a color-coded map showing temperature variations across an urban area.
