@@ -2,6 +2,9 @@
 
 This project is a dynamic web application for visualizing urban microclimates, specifically focusing on urban heat islands and building footprints. It allows users to explore microclimate variations in a city and provides simulated environmental data. The application defaults to showing data for Lahore, Pakistan, but can be updated to the user's current location using geolocation.
 
+
+WebMap: https://jakirhossaincde.github.io/UHM/
+
 ## Features
 
 - **Heat Map Visualization**: Displays a color-coded map showing temperature variations across an urban area.
