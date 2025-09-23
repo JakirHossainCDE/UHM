@@ -1,6 +1,6 @@
-// Lahore coordinates
-const LAHORE_LAT = 31.5204;
-const LAHORE_LON = 74.3587;
+// Dhaka coordinates
+const DHAKA_LAT = 23.8103;
+const DHAKA_LON = 90.4125;
 const DEFAULT_ZOOM = 10;
 const DETAIL_ZOOM = 15;
 
@@ -172,3 +172,4 @@ function showLocationMessage(message, type) {
 // Initialize the map with Lahore on page load
 
 window.onload = initializeMap;
+
