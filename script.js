@@ -13,7 +13,7 @@ let activeBaseLayer;
 let forecastRange = 'hourly';
 let boundaryGeometry = null;
 let boundaryLayer = null;
-const BANGLADESH_BOUNDS = { south: 20.55, north: 26.65, west: 88.00, east: 92.70 };
+const SURFACE_BOUNDS = { south: 18.30, north: 28.90, west: 85.50, east: 95.20 };
 const SURFACE_SIZE = 9;
 const BANGLADESH_BOUNDARY_URL = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/BGD/ADM0/geoBoundaries-BGD-ADM0.geojson';
 const surfaceDefinitions = {
@@ -39,8 +39,8 @@ function surfaceCoordinates() {
     for (let row = 0; row < SURFACE_SIZE; row += 1) {
         for (let column = 0; column < SURFACE_SIZE; column += 1) {
             coordinates.push({
-                lat: BANGLADESH_BOUNDS.south + (BANGLADESH_BOUNDS.north - BANGLADESH_BOUNDS.south) * row / (SURFACE_SIZE - 1),
-                lon: BANGLADESH_BOUNDS.west + (BANGLADESH_BOUNDS.east - BANGLADESH_BOUNDS.west) * column / (SURFACE_SIZE - 1)
+                lat: SURFACE_BOUNDS.south + (SURFACE_BOUNDS.north - SURFACE_BOUNDS.south) * row / (SURFACE_SIZE - 1),
+                lon: SURFACE_BOUNDS.west + (SURFACE_BOUNDS.east - SURFACE_BOUNDS.west) * column / (SURFACE_SIZE - 1)
             });
         }
     }
@@ -123,11 +123,10 @@ function renderSurfaceLayer() {
                 .filter(value => Number.isFinite(value));
             if (!values.length) continue;
             const value = values.reduce((sum, item) => sum + item, 0) / values.length;
-            const south = BANGLADESH_BOUNDS.south + (BANGLADESH_BOUNDS.north - BANGLADESH_BOUNDS.south) * row / (SURFACE_SIZE - 1);
-            const north = BANGLADESH_BOUNDS.south + (BANGLADESH_BOUNDS.north - BANGLADESH_BOUNDS.south) * (row + 1) / (SURFACE_SIZE - 1);
-            const west = BANGLADESH_BOUNDS.west + (BANGLADESH_BOUNDS.east - BANGLADESH_BOUNDS.west) * column / (SURFACE_SIZE - 1);
-            const east = BANGLADESH_BOUNDS.west + (BANGLADESH_BOUNDS.east - BANGLADESH_BOUNDS.west) * (column + 1) / (SURFACE_SIZE - 1);
-            if (!cellTouchesBoundary(south, north, west, east)) continue;
+            const south = SURFACE_BOUNDS.south + (SURFACE_BOUNDS.north - SURFACE_BOUNDS.south) * row / (SURFACE_SIZE - 1);
+            const north = SURFACE_BOUNDS.south + (SURFACE_BOUNDS.north - SURFACE_BOUNDS.south) * (row + 1) / (SURFACE_SIZE - 1);
+            const west = SURFACE_BOUNDS.west + (SURFACE_BOUNDS.east - SURFACE_BOUNDS.west) * column / (SURFACE_SIZE - 1);
+            const east = SURFACE_BOUNDS.west + (SURFACE_BOUNDS.east - SURFACE_BOUNDS.west) * (column + 1) / (SURFACE_SIZE - 1);
             cells.push(L.rectangle([[south, west], [north, east]], {
                 color: colorForValue(value, definition),
                 weight: 1,
@@ -223,10 +222,10 @@ async function loadWeather() {
     }
 }
 async function initializeMap() {
-    map = L.map('map', { zoomControl: false, attributionControl: true, maxBounds: [[20.2, 87.6], [27.1, 93.1]], maxBoundsViscosity: .7 }).setView([BANGLADESH.lat, BANGLADESH.lon], 7);
+    map = L.map('map', { zoomControl: false, attributionControl: true, maxBounds: [[17.95, 85.15], [29.25, 95.55]], maxBoundsViscosity: .7 }).setView([BANGLADESH.lat, BANGLADESH.lon], 6);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     baseLayers = {
-        urban: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }),
+        urban: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '&copy; CARTO' }),
         satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '&copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community' })
     };
     activeBaseLayer = baseLayers.urban.addTo(map);

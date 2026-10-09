@@ -5,17 +5,14 @@ This project is a dynamic web application for visualizing environmental conditio
 
 WebMap: https://jakirhossaincde.github.io/UHM/
 
-<img width="1363" height="678" alt="image" src="https://github.com/user-attachments/assets/bbd21023-f266-4eea-845d-2ce387895aa5" />
-
-
 ## Features
 
 - **Live Bangladesh Surface**: Displays a Bangladesh-wide interpolated grid surface. The layer selector supports temperature, wind speed, humidity, rain probability, and air quality.
 - **Three-Step Map Legend**: Uses cooler/moderate/hotter-style color steps for the active surface variable, with variable-specific labels such as calm/breezy/windy or good/moderate/poor.
-- **Urban Live Surface**: Combines the original street basemap with the live environmental surface. The control can hide or show the surface while returning to the urban basemap.
-- **No-Key Street Basemap**: Uses standard OpenStreetMap tiles without a Carto, Mapbox, or other API key.
+- **Urban Live Surface**: Combines the original CARTO Voyager urban basemap with the live environmental surface. The live surface covers Bangladesh and an approximately 250 km surrounding analysis zone.
+- **No-Key Urban Basemap**: Uses CARTO Voyager tiles without a Mapbox token or other application key.
 - **Satellite Imagery**: Provides an optional Esri World Imagery layer through the `Satellite imagery` button for visualizing land cover and built-up form.
-- **Exact Bangladesh Boundary**: The live environmental surface is clipped to the high-resolution geoBoundaries ADM0 country geometry, rather than being displayed as a rectangular national extent.
+- **Exact Bangladesh Boundary**: Shows the high-resolution geoBoundaries ADM0 country outline over the buffered environmental surface.
 - **3D Building Atlas**: Opens the official GlobalBuildingAtlas viewer for building height and urban-form context across Bangladesh.
 - **Point Weather Inspection**: Click any point in Bangladesh to retrieve its current weather and forecast.
 - **Forecast Modes**: Provides the next 12 hours and a seven-day forecast.
@@ -54,7 +51,7 @@ If you want to serve it using a local web server (useful for more complex projec
 -   **CSS3**: For all the styling, including the gradient background and responsive design.
 -   **JavaScript (ES6+)**: For dynamic functionality and user interactions.
 -   **Leaflet**: The interactive map engine and layer switching framework.
--   **OpenStreetMap**: The default no-key street basemap.
+-   **CARTO Voyager**: The default no-key urban basemap.
 -   **Esri World Imagery**: Selectable satellite imagery basemap; attribution is shown on the map.
 -   **geoBoundaries ADM0 GeoJSON**: High-resolution Bangladesh country outline and surface mask.
 -   **Open-Meteo**: Live weather, forecast, and air-quality data.
