@@ -16,7 +16,7 @@ let boundaryGeometry = null;
 let boundaryLayer = null;
 const BANGLADESH_BOUNDS = { south: 20.55, north: 26.65, west: 88.00, east: 92.70 };
 const SURFACE_SIZE = 9;
-const BANGLADESH_BOUNDARY_URL = 'https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/BGD/ADM0/geoBoundaries-BGD-ADM0.geojson';
+const BANGLADESH_BOUNDARY_URL = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/BGD/ADM0/geoBoundaries-BGD-ADM0.geojson';
 const surfaceDefinitions = {
     temperature: { label: 'Temperature', unit: '°C', min: 18, max: 42, low: 'Cooler', middle: 'Warm', high: 'Hotter' },
     wind: { label: 'Wind speed', unit: ' km/h', min: 0, max: 40, low: 'Calm', middle: 'Breezy', high: 'Windy' },
