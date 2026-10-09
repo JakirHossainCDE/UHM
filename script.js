@@ -83,7 +83,7 @@ async function loadBoundary() {
         const boundary = await response.json();
         boundaryGeometry = boundary.geometry;
         boundaryLayer = L.geoJSON(boundary, {
-            style: { color: '#17324d', weight: 2, opacity: .9, fillColor: '#0f766e', fillOpacity: .035 },
+            style: { color: '#073b4c', weight: 3, opacity: 1, fillColor: '#0f766e', fillOpacity: .08 },
             interactive: false
         }).addTo(map);
     } catch (error) {
@@ -129,9 +129,6 @@ function renderSurfaceLayer() {
     }
     surfaceLayer = L.layerGroup(cells).addTo(map);
     if (boundaryLayer) boundaryLayer.bringToFront();
-    setText('legendLow', definition.low);
-    setText('legendMiddle', definition.middle);
-    setText('legendHigh', definition.high);
 }
 async function loadSurfaceData() {
     try {
