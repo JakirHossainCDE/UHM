@@ -157,17 +157,22 @@ async function loadSurfaceData() {
     }
 }
 function renderHourly(hourly) {
+    const forecastList = document.getElementById('forecastList');
+    forecastList.classList.remove('daily-forecast');
     const now = hourly.time.findIndex(time => time >= weatherData.current.current.time);
     const first = Math.max(now, 0);
-    document.getElementById('forecastList').innerHTML = hourly.time.slice(first, first + 12).map((time, index) => {
+    forecastList.innerHTML = hourly.time.slice(first, first + 12).map((time, index) => {
         const [, icon] = description(hourly.weather_code[first + index]);
         return `<div class="forecast-item ${index === 0 ? 'current' : ''}"><span>${index === 0 ? 'Now' : formatHour(time)}</span><i class="fas ${icon}"></i><strong>${Math.round(hourly.temperature_2m[first + index])}°</strong><small>${hourly.precipitation_probability[first + index] || 0}% rain</small></div>`;
     }).join('');
 }
 function renderDaily(daily) {
-    document.getElementById('forecastList').innerHTML = daily.time.map((day, index) => {
+    const forecastList = document.getElementById('forecastList');
+    forecastList.classList.add('daily-forecast');
+    forecastList.innerHTML = daily.time.map((day, index) => {
         const [label, icon] = description(daily.weather_code[index]);
-        return `<div class="daily-item"><strong>${index === 0 ? 'Today' : formatDay(day)}</strong><i class="fas ${icon}" title="${label}"></i><b>${Math.round(daily.temperature_2m_max[index])}° / ${Math.round(daily.temperature_2m_min[index])}°</b><small>${daily.precipitation_probability_max[index] || 0}% rain</small></div>`;
+        const dateLabel = index === 0 ? 'Today' : formatDay(day);
+        return `<div class="daily-item"><strong>${dateLabel}</strong><i class="fas ${icon}" title="${label}" aria-label="${label}"></i><b><span>${Math.round(daily.temperature_2m_max[index])}°</span> / ${Math.round(daily.temperature_2m_min[index])}°</b><small>${daily.precipitation_probability_max[index] || 0}% rain</small></div>`;
     }).join('');
 }
 function renderForecast() { if (!weatherData) return; if (forecastRange === 'hourly') renderHourly(weatherData.current.hourly); else renderDaily(weatherData.current.daily); }
