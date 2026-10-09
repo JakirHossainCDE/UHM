@@ -12,7 +12,7 @@ WebMap: https://jakirhossaincde.github.io/UHM/
 
 - **Live Bangladesh Surface**: Displays a Bangladesh-wide interpolated grid surface. The layer selector supports temperature, wind speed, humidity, rain probability, and air quality.
 - **Three-Step Map Legend**: Uses cooler/moderate/hotter-style color steps for the active surface variable, with variable-specific labels such as calm/breezy/windy or good/moderate/poor.
-- **Hourly Refresh**: The surface fetches a new Open-Meteo weather and air-quality grid automatically every hour. The `Live surface` button can hide or show it.
+- **Urban Live Surface**: Combines the original street basemap with the live environmental surface. The control can hide or show the surface while returning to the urban basemap.
 - **No-Key Street Basemap**: Uses standard OpenStreetMap tiles without a Carto, Mapbox, or other API key.
 - **Satellite Imagery**: Provides an optional Esri World Imagery layer through the `Satellite imagery` button for visualizing land cover and built-up form.
 - **Exact Bangladesh Boundary**: The live environmental surface is clipped to the high-resolution geoBoundaries ADM0 country geometry, rather than being displayed as a rectangular national extent.

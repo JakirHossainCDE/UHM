@@ -20,3 +20,12 @@
 .map-legend{right:18px;bottom:70px;padding:7px 9px;font-size:.62rem}.map-controls{bottom:18px}.map-control-button{padding:8px 10px;font-size:.7rem}
 @media(max-width:900px){.weather-card{width:270px}.forecast-card{width:315px}}
 @media(max-width:700px){.topbar{min-height:56px;padding:8px 10px}.brand-mark{width:32px;height:32px}.brand h1{font-size:.92rem}.weather-card,.forecast-card{width:auto;padding:13px}.weather-card{margin-top:-155px}.forecast-card{margin-top:8px}.map-legend{padding:6px 7px}.map-controls{bottom:10px}.map-control-button{padding:8px 5px;font-size:.62rem}}
+
+/* Final compact pass */
+.topbar{min-height:56px;padding:8px 12px}
+.brand{gap:8px}.brand-mark{width:32px;height:32px;border-radius:9px}h1{font-size:1rem}.eyebrow{font-size:.56rem}
+.weather-card{width:260px;padding:12px;border-radius:12px}.weather-icon{font-size:1.45rem}.temperature-row{margin:9px 0}.temperature-row strong{font-size:2.35rem}.temperature-row div{font-size:.63rem}.metric-grid{gap:5px}.metric-grid div{padding-top:5px}.metric-grid span{font-size:.58rem}.metric-grid b{font-size:.7rem}
+.forecast-card{width:300px;padding:12px;border-radius:12px}.forecast-tabs{margin-top:8px}.forecast-tab{padding:5px;font-size:.64rem}.forecast-list{margin-top:7px;max-height:140px}.daily-item{flex-basis:82px;gap:5px;padding:8px 4px}.daily-item strong{font-size:.62rem}.daily-item i{font-size:.9rem}.daily-item b{font-size:.7rem}.daily-item small{font-size:.54rem}
+.map-help{padding:7px 10px;font-size:.62rem}.map-legend{right:14px;bottom:66px;padding:6px 8px;font-size:.58rem}.layer-picker select{padding:3px 4px;font-size:.6rem}.map-controls{bottom:16px;padding:4px}.map-control-button{gap:5px;padding:7px 8px;font-size:.64rem}
+@media(max-width:900px){.weather-card{width:245px}.forecast-card{width:280px}}
+@media(max-width:700px){.topbar{min-height:52px;padding:7px 9px}.brand-mark{width:29px;height:29px}.brand h1{font-size:.86rem}.weather-card,.forecast-card{width:auto;padding:11px}.weather-card{margin-top:-148px}.forecast-card{margin-top:7px}.map-legend{padding:5px 6px}.map-controls{bottom:8px}.map-control-button{padding:7px 4px;font-size:.58rem}}

@@ -58,7 +58,7 @@ function surfaceUrl() {
 function pointInRing(point, ring) {
     const [longitude, latitude] = point;
     let inside = false;
-    for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index += 1) {
+    for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index, index += 1) {
         const [currentLongitude, currentLatitude] = ring[index];
         const [previousLongitude, previousLatitude] = ring[previous];
         const intersects = ((currentLatitude > latitude) !== (previousLatitude > latitude))
@@ -74,6 +74,15 @@ function pointInBoundary(latitude, longitude) {
     if (!boundaryGeometry) return true;
     const polygons = boundaryGeometry.type === 'MultiPolygon' ? boundaryGeometry.coordinates : [boundaryGeometry.coordinates];
     return polygons.some(polygon => pointInPolygon([longitude, latitude], polygon));
+}
+function cellTouchesBoundary(south, north, west, east) {
+    const samples = [
+        [(south + north) / 2, (west + east) / 2],
+        [south, west], [south, east], [north, west], [north, east],
+        [(south + north) / 2, west], [(south + north) / 2, east],
+        [south, (west + east) / 2], [north, (west + east) / 2]
+    ];
+    return samples.some(([latitude, longitude]) => pointInBoundary(latitude, longitude));
 }
 async function loadBoundary() {
     try {
@@ -118,12 +127,13 @@ function renderSurfaceLayer() {
             const north = BANGLADESH_BOUNDS.south + (BANGLADESH_BOUNDS.north - BANGLADESH_BOUNDS.south) * (row + 1) / (SURFACE_SIZE - 1);
             const west = BANGLADESH_BOUNDS.west + (BANGLADESH_BOUNDS.east - BANGLADESH_BOUNDS.west) * column / (SURFACE_SIZE - 1);
             const east = BANGLADESH_BOUNDS.west + (BANGLADESH_BOUNDS.east - BANGLADESH_BOUNDS.west) * (column + 1) / (SURFACE_SIZE - 1);
-            if (!pointInBoundary((south + north) / 2, (west + east) / 2)) continue;
+            if (!cellTouchesBoundary(south, north, west, east)) continue;
             cells.push(L.rectangle([[south, west], [north, east]], {
                 color: colorForValue(value, definition),
-                weight: 0,
+                weight: 1,
+                opacity: .35,
                 fillColor: colorForValue(value, definition),
-                fillOpacity: .34
+                fillOpacity: .58
             }).bindTooltip(`${definition.label}: ${value.toFixed(1)}${definition.unit}`, { sticky: true, className: 'heat-tooltip' }));
         }
     }
@@ -229,24 +239,21 @@ async function initializeMap() {
 document.querySelectorAll('.forecast-tab').forEach(button => button.addEventListener('click', () => { forecastRange = button.dataset.range; document.querySelectorAll('.forecast-tab').forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-selected', item === button ? 'true' : 'false'); }); renderForecast(); }));
 document.getElementById('surfaceLayer').addEventListener('change', event => { surfaceMetric = event.target.value; renderSurfaceLayer(); });
 document.getElementById('refreshWeather').addEventListener('click', loadWeather);
-document.getElementById('heatLayerBtn').addEventListener('click', () => {
-    if (!surfaceLayer) return;
-    if (map.hasLayer(surfaceLayer)) {
-        map.removeLayer(surfaceLayer);
-        document.getElementById('heatLayerBtn').classList.remove('active');
-    } else {
-        surfaceLayer.addTo(map);
-        document.getElementById('heatLayerBtn').classList.add('active');
-    }
-});
 function switchBaseLayer(name) {
     if (activeBaseLayer === baseLayers[name]) return;
     map.removeLayer(activeBaseLayer);
     activeBaseLayer = baseLayers[name].addTo(map);
-    document.getElementById('urbanMapBtn').classList.toggle('active', name === 'urban');
     document.getElementById('satelliteMapBtn').classList.toggle('active', name === 'satellite');
+    document.getElementById('urbanLiveSurfaceBtn').classList.toggle('active', name === 'urban' && Boolean(surfaceLayer && map.hasLayer(surfaceLayer)));
 }
-document.getElementById('urbanMapBtn').addEventListener('click', () => switchBaseLayer('urban'));
+document.getElementById('urbanLiveSurfaceBtn').addEventListener('click', () => {
+    switchBaseLayer('urban');
+    if (!surfaceLayer) return;
+    if (!map.hasLayer(surfaceLayer)) {
+        surfaceLayer.addTo(map);
+    }
+    document.getElementById('urbanLiveSurfaceBtn').classList.add('active');
+});
 document.getElementById('satelliteMapBtn').addEventListener('click', () => switchBaseLayer('satellite'));
 document.getElementById('atlasBtn').addEventListener('click', () => { document.getElementById('atlasModal').classList.add('open'); document.getElementById('atlasModal').setAttribute('aria-hidden', 'false'); });
 document.getElementById('closeAtlas').addEventListener('click', () => { document.getElementById('atlasModal').classList.remove('open'); document.getElementById('atlasModal').setAttribute('aria-hidden', 'true'); });
