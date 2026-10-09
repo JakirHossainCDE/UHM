@@ -13,8 +13,8 @@ WebMap: https://jakirhossaincde.github.io/UHM/
 - **Live Bangladesh Surface**: Displays a Bangladesh-wide interpolated grid surface. The layer selector supports temperature, wind speed, humidity, rain probability, and air quality.
 - **Three-Step Map Legend**: Uses cooler/moderate/hotter-style color steps for the active surface variable, with variable-specific labels such as calm/breezy/windy or good/moderate/poor.
 - **Hourly Refresh**: The surface fetches a new Open-Meteo weather and air-quality grid automatically every hour. The `Live surface` button can hide or show it.
-- **Urban Basemap**: Uses the Carto Voyager basemap for a clean, low-noise urban context suitable for reading climate overlays.
-- **Previous Map View**: Keeps the earlier Mapbox-based map style available as a basemap toggle.
+- **No-Key Street Basemap**: Uses standard OpenStreetMap tiles without a Carto, Mapbox, or other API key.
+- **Satellite Imagery**: Provides an optional Esri World Imagery layer through the `Satellite imagery` button for visualizing land cover and built-up form.
 - **3D Building Atlas**: Opens the official GlobalBuildingAtlas viewer for building height and urban-form context across Bangladesh.
 - **Point Weather Inspection**: Click any point in Bangladesh to retrieve its current weather and forecast.
 - **Forecast Modes**: Provides the next 12 hours and a seven-day forecast.
@@ -53,8 +53,8 @@ If you want to serve it using a local web server (useful for more complex projec
 -   **CSS3**: For all the styling, including the gradient background and responsive design.
 -   **JavaScript (ES6+)**: For dynamic functionality and user interactions.
 -   **Leaflet**: The interactive map engine and layer switching framework.
--   **Carto Voyager**: The default urban-oriented basemap.
--   **Mapbox**: Retained as the selectable previous map view.
+-   **OpenStreetMap**: The default no-key street basemap.
+-   **Esri World Imagery**: Selectable satellite imagery basemap; attribution is shown on the map.
 -   **Open-Meteo**: Live weather, forecast, and air-quality data.
 -   **Font Awesome**: For the icons used in the UI.
 

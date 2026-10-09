@@ -178,8 +178,8 @@ function initializeMap() {
     map = L.map('map', { zoomControl: false, attributionControl: true, maxBounds: [[20.2, 87.6], [27.1, 93.1]], maxBoundsViscosity: .7 }).setView([BANGLADESH.lat, BANGLADESH.lon], 7);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     baseLayers = {
-        urban: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20, subdomains: 'abcd', attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }),
-        previous: L.tileLayer('https://api.mapbox.com/styles/v1/tejas2/cm9jmvniw001201sbbzidd9v1/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoidGVqYXMyIiwiYSI6ImNtOWppcHJsOTBlYzQyaXNiczV5cWMyYzUifQ.iu9NmyrnMSKEeGGtnuv8Tg', { maxZoom: 20, attribution: '&copy; Mapbox &copy; OpenStreetMap' })
+        urban: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }),
+        satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '&copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community' })
     };
     activeBaseLayer = baseLayers.urban.addTo(map);
     buildHeatLayer();
@@ -206,10 +206,10 @@ function switchBaseLayer(name) {
     map.removeLayer(activeBaseLayer);
     activeBaseLayer = baseLayers[name].addTo(map);
     document.getElementById('urbanMapBtn').classList.toggle('active', name === 'urban');
-    document.getElementById('previousMapBtn').classList.toggle('active', name === 'previous');
+    document.getElementById('satelliteMapBtn').classList.toggle('active', name === 'satellite');
 }
 document.getElementById('urbanMapBtn').addEventListener('click', () => switchBaseLayer('urban'));
-document.getElementById('previousMapBtn').addEventListener('click', () => switchBaseLayer('previous'));
+document.getElementById('satelliteMapBtn').addEventListener('click', () => switchBaseLayer('satellite'));
 document.getElementById('atlasBtn').addEventListener('click', () => { document.getElementById('atlasModal').classList.add('open'); document.getElementById('atlasModal').setAttribute('aria-hidden', 'false'); });
 document.getElementById('closeAtlas').addEventListener('click', () => { document.getElementById('atlasModal').classList.remove('open'); document.getElementById('atlasModal').setAttribute('aria-hidden', 'true'); });
 document.getElementById('atlasModal').addEventListener('click', event => { if (event.target.id === 'atlasModal') document.getElementById('closeAtlas').click(); });

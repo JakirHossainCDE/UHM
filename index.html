@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-    <link rel="stylesheet" href="style.css?v=20261009-bangladesh">
+    <link rel="stylesheet" href="style.css?v=20261009-basemaps">
 </head>
 <body>
 <main class="app-shell">
@@ -84,18 +84,18 @@
             <span><i class="legend-swatch cool"></i><span id="legendLow">Cooler</span></span>
             <span><i class="legend-swatch middle"></i><span id="legendMiddle">Moderate</span></span>
             <span><i class="legend-swatch warm"></i><span id="legendHigh">Hotter</span></span>
-            <span class="map-attribution">Carto Voyager · © OpenStreetMap</span>
+            <span class="map-attribution">© OpenStreetMap · Satellite: Esri</span>
         </div>
 
         <nav class="map-controls glass-card" aria-label="Map controls">
             <button class="map-control-button active" id="heatLayerBtn"><i class="fas fa-temperature-high"></i><span>Live surface</span></button>
             <button class="map-control-button active" id="urbanMapBtn"><i class="fas fa-city"></i><span>Urban map</span></button>
-            <button class="map-control-button" id="previousMapBtn"><i class="fas fa-map"></i><span>Previous view</span></button>
+            <button class="map-control-button" id="satelliteMapBtn"><i class="fas fa-satellite"></i><span>Satellite imagery</span></button>
             <button class="map-control-button" id="atlasBtn"><i class="fas fa-cubes"></i><span>3D atlas</span></button>
             <button class="map-control-button" id="geolocation-btn"><i class="fas fa-location-crosshairs"></i><span>My location</span></button>
         </nav>
 
-        <footer><span>Bangladesh Microclimate Atlas</span><span>Weather: Open-Meteo · Basemap: Carto Voyager</span></footer>
+        <footer><span>Bangladesh Microclimate Atlas</span><span>Weather: Open-Meteo · Basemap: OpenStreetMap · Satellite: Esri</span></footer>
     </section>
 
     <aside class="atlas-modal" id="atlasModal" aria-hidden="true">
@@ -110,6 +110,6 @@
     </aside>
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<script src="script.js?v=20261009-bangladesh"></script>
+<script src="script.js?v=20261009-basemaps"></script>
 </body>
 </html>
