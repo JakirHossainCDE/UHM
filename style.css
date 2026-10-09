@@ -29,3 +29,13 @@
 .map-help{padding:7px 10px;font-size:.62rem}.map-legend{right:14px;bottom:66px;padding:6px 8px;font-size:.58rem}.layer-picker select{padding:3px 4px;font-size:.6rem}.map-controls{bottom:16px;padding:4px}.map-control-button{gap:5px;padding:7px 8px;font-size:.64rem}
 @media(max-width:900px){.weather-card{width:245px}.forecast-card{width:280px}}
 @media(max-width:700px){.topbar{min-height:52px;padding:7px 9px}.brand-mark{width:29px;height:29px}.brand h1{font-size:.86rem}.weather-card,.forecast-card{width:auto;padding:11px}.weather-card{margin-top:-148px}.forecast-card{margin-top:7px}.map-legend{padding:5px 6px}.map-controls{bottom:8px}.map-control-button{padding:7px 4px;font-size:.58rem}}
+
+@media (min-width:701px) and (max-height:760px){
+    .topbar{top:10px;left:14px;right:14px;min-height:48px;padding:7px 10px}
+    .weather-card,.forecast-card{top:72px}
+    .weather-card{left:14px}.forecast-card{right:14px}
+    .map-help{display:none}
+    .map-legend{right:14px;bottom:78px}
+    .map-controls{bottom:10px}
+    footer{display:none}
+}

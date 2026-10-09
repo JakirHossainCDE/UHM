@@ -8,9 +8,9 @@ WebMap: https://jakirhossaincde.github.io/UHM/
 ## Features
 
 - **Live Bangladesh Surface**: Displays a Bangladesh-wide interpolated grid surface. The layer selector supports temperature, wind speed, humidity, rain probability, and air quality.
-- **Three-Step Map Legend**: Uses cooler/moderate/hotter-style color steps for the active surface variable, with variable-specific labels such as calm/breezy/windy or good/moderate/poor.
-- **Urban Surface**: Switches from the default Leaflet/OpenStreetMap basemap to Mapbox Light with the live colored environmental surface, providing the urban heat-island indication layer. The live surface covers Bangladesh and an approximately 250 km surrounding analysis zone.
-- **Default Leaflet Basemap**: Opens with standard Leaflet/OpenStreetMap tiles; Mapbox Light is available through the `Urban Surface` control.
+- **Live Surface Selector**: Switches the rendered surface between temperature, wind speed, humidity, rain probability, and air quality.
+- **Environmental Surface**: Switches from the default Leaflet/OpenStreetMap basemap to Mapbox Light with the live colored environmental surface, providing the urban heat-island indication layer. The live surface covers Bangladesh and an approximately 250 km surrounding analysis zone.
+- **Default Leaflet Basemap**: Opens with standard Leaflet/OpenStreetMap tiles; Mapbox Light is available through the `Environmental Surface` control.
 - **Satellite Imagery**: Provides an optional Esri World Imagery layer through the `Satellite imagery` button for visualizing land cover and built-up form.
 - **Exact Bangladesh Boundary**: Shows the high-resolution geoBoundaries ADM0 country outline over the buffered environmental surface.
 - **3D Building Atlas**: Opens the official GlobalBuildingAtlas viewer for building height and urban-form context across Bangladesh.
@@ -51,7 +51,7 @@ If you want to serve it using a local web server (useful for more complex projec
 -   **CSS3**: For all the styling, including the gradient background and responsive design.
 -   **JavaScript (ES6+)**: For dynamic functionality and user interactions.
 -   **Leaflet**: The interactive map engine and layer switching framework.
--   **Mapbox Light**: Selectable urban basemap used by the `Urban Surface` control.
+-   **Mapbox Light**: Selectable urban basemap used by the `Environmental Surface` control.
 -   **OpenStreetMap**: Default Leaflet basemap.
 -   **Esri World Imagery**: Selectable satellite imagery basemap; attribution is shown on the map.
 -   **geoBoundaries ADM0 GeoJSON**: High-resolution Bangladesh country outline and surface mask.
