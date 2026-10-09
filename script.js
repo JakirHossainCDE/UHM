@@ -12,8 +12,11 @@ let surfaceMetric = 'temperature';
 let baseLayers;
 let activeBaseLayer;
 let forecastRange = 'hourly';
+let boundaryGeometry = null;
+let boundaryLayer = null;
 const BANGLADESH_BOUNDS = { south: 20.55, north: 26.65, west: 88.00, east: 92.70 };
 const SURFACE_SIZE = 9;
+const BANGLADESH_BOUNDARY_URL = 'https://raw.githubusercontent.com/johan/world.geo.json/master/countries/BGD.geo.json';
 const surfaceDefinitions = {
     temperature: { label: 'Temperature', unit: '°C', min: 18, max: 42, low: 'Cooler', middle: 'Warm', high: 'Hotter' },
     wind: { label: 'Wind speed', unit: ' km/h', min: 0, max: 40, low: 'Calm', middle: 'Breezy', high: 'Windy' },
@@ -53,6 +56,40 @@ function surfaceUrl() {
         air: `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=us_aqi&timezone=Asia%2FDhaka`
     };
 }
+function pointInRing(point, ring) {
+    const [longitude, latitude] = point;
+    let inside = false;
+    for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index += 1) {
+        const [currentLongitude, currentLatitude] = ring[index];
+        const [previousLongitude, previousLatitude] = ring[previous];
+        const intersects = ((currentLatitude > latitude) !== (previousLatitude > latitude))
+            && (longitude < (previousLongitude - currentLongitude) * (latitude - currentLatitude) / (previousLatitude - currentLatitude) + currentLongitude);
+        if (intersects) inside = !inside;
+    }
+    return inside;
+}
+function pointInPolygon(point, polygon) {
+    return pointInRing(point, polygon[0]) && !polygon.slice(1).some(ring => pointInRing(point, ring));
+}
+function pointInBoundary(latitude, longitude) {
+    if (!boundaryGeometry) return true;
+    const polygons = boundaryGeometry.type === 'MultiPolygon' ? boundaryGeometry.coordinates : [boundaryGeometry.coordinates];
+    return polygons.some(polygon => pointInPolygon([longitude, latitude], polygon));
+}
+async function loadBoundary() {
+    try {
+        const response = await fetch(BANGLADESH_BOUNDARY_URL);
+        if (!response.ok) throw new Error('Bangladesh boundary unavailable');
+        const boundary = await response.json();
+        boundaryGeometry = boundary.geometry;
+        boundaryLayer = L.geoJSON(boundary, {
+            style: { color: '#17324d', weight: 2, opacity: .9, fillColor: '#0f766e', fillOpacity: .035 },
+            interactive: false
+        }).addTo(map);
+    } catch (error) {
+        setText('dataStatus', 'Weather connected · country boundary unavailable');
+    }
+}
 function colorForValue(value, definition) {
     const ratio = Math.max(0, Math.min(1, (value - definition.min) / (definition.max - definition.min)));
     const stops = [[58, 134, 255], [0, 168, 150], [245, 158, 11], [239, 79, 63]];
@@ -81,6 +118,7 @@ function renderSurfaceLayer() {
             const north = BANGLADESH_BOUNDS.south + (BANGLADESH_BOUNDS.north - BANGLADESH_BOUNDS.south) * (row + 1) / (SURFACE_SIZE - 1);
             const west = BANGLADESH_BOUNDS.west + (BANGLADESH_BOUNDS.east - BANGLADESH_BOUNDS.west) * column / (SURFACE_SIZE - 1);
             const east = BANGLADESH_BOUNDS.west + (BANGLADESH_BOUNDS.east - BANGLADESH_BOUNDS.west) * (column + 1) / (SURFACE_SIZE - 1);
+            if (!pointInBoundary((south + north) / 2, (west + east) / 2)) continue;
             cells.push(L.rectangle([[south, west], [north, east]], {
                 color: colorForValue(value, definition),
                 weight: 0,
@@ -90,6 +128,7 @@ function renderSurfaceLayer() {
         }
     }
     surfaceLayer = L.layerGroup(cells).addTo(map);
+    if (boundaryLayer) boundaryLayer.bringToFront();
     setText('legendLow', definition.low);
     setText('legendMiddle', definition.middle);
     setText('legendHigh', definition.high);
@@ -174,7 +213,7 @@ async function loadWeather() {
 function buildHeatLayer() {
     heatLayer = L.layerGroup().addTo(map);
 }
-function initializeMap() {
+async function initializeMap() {
     map = L.map('map', { zoomControl: false, attributionControl: true, maxBounds: [[20.2, 87.6], [27.1, 93.1]], maxBoundsViscosity: .7 }).setView([BANGLADESH.lat, BANGLADESH.lon], 7);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     baseLayers = {
@@ -183,6 +222,7 @@ function initializeMap() {
     };
     activeBaseLayer = baseLayers.urban.addTo(map);
     buildHeatLayer();
+    await loadBoundary();
     loadSurfaceData();
     window.setInterval(loadSurfaceData, 60 * 60 * 1000);
     setSelectedPoint(BANGLADESH.lat, BANGLADESH.lon, BANGLADESH.name);
