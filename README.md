@@ -1,4 +1,40 @@
-# Urban Heat Mapping
+# Dhaka Microclimate Atlas
+
+A map-first urban climate dashboard for exploring heat patterns, live weather, and building context across Dhaka, Bangladesh.
+
+**Live site:** https://jakirhossaincde.github.io/UHM/
+
+## Features
+- Dhaka-centered Mapbox urban heat map.
+- Live current conditions from [Open-Meteo Weather API](https://open-meteo.com/), including temperature, apparent temperature, humidity, wind, precipitation probability, and WMO weather descriptions.
+- Live air-quality category from the [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api) using US AQI.
+- Hourly forecast strip for the next five hours.
+- Geolocation control for recentering the map.
+- Official [GlobalBuildingAtlas](https://tubvsig-so2sat-vm1.srv.mwn.de/) link for exploring LoD1 3D building models from TUM.
+- Responsive cartographic interface with map overlays, legend, attribution, and accessible controls.
+
+## Run locally
+
+Open index.html in a modern browser, or serve the folder with a static server:
+
+    python -m http.server 8000
+
+Then open http://localhost:8000.
+
+## Data and attribution
+
+- Map: Mapbox and OpenStreetMap attribution is provided in the embedded map.
+- Weather and air quality: Open-Meteo. No API key is required for non-commercial use.
+- 3D building reference: GlobalBuildingAtlas, TUM / Zhu et al. (2025), CC BY-NC 4.0. The project links to the official viewer rather than redistributing the global dataset.
+
+## Project files
+
+- index.html: dashboard structure and map overlays.
+- style.css: responsive visual system and cartographic UI.
+- script.js: map controls, geolocation, Open-Meteo requests, and forecast rendering.
+- app.py: optional Flask entry point.
+
+© 2025 Urban Heat Mapping | Concept by Amna Azeem and Md Jakir Hossain.# Urban Heat Mapping
 
 This project is a dynamic web application for visualizing urban microclimates, specifically focusing on urban heat islands and building footprints. It allows users to explore microclimate variations in a city and provides simulated environmental data. The application defaults to showing data for Lahore, Pakistan, but can be updated to the user's current location using geolocation.
 
