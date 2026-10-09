@@ -1,42 +1,6 @@
-# Dhaka Microclimate Atlas
+# Urban Heat Mapping
 
-A map-first urban climate dashboard for exploring heat patterns, live weather, and building context across Dhaka, Bangladesh.
-
-**Live site:** https://jakirhossaincde.github.io/UHM/
-
-## Features
-- Dhaka-centered Mapbox urban heat map.
-- Live current conditions from [Open-Meteo Weather API](https://open-meteo.com/), including temperature, apparent temperature, humidity, wind, precipitation probability, and WMO weather descriptions.
-- Live air-quality category from the [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api) using US AQI.
-- Hourly forecast strip for the next five hours.
-- Geolocation control for recentering the map.
-- Official [GlobalBuildingAtlas](https://tubvsig-so2sat-vm1.srv.mwn.de/) link for exploring LoD1 3D building models from TUM.
-- Responsive cartographic interface with map overlays, legend, attribution, and accessible controls.
-
-## Run locally
-
-Open index.html in a modern browser, or serve the folder with a static server:
-
-    python -m http.server 8000
-
-Then open http://localhost:8000.
-
-## Data and attribution
-
-- Map: Mapbox and OpenStreetMap attribution is provided in the embedded map.
-- Weather and air quality: Open-Meteo. No API key is required for non-commercial use.
-- 3D building reference: GlobalBuildingAtlas, TUM / Zhu et al. (2025), CC BY-NC 4.0. The project links to the official viewer rather than redistributing the global dataset.
-
-## Project files
-
-- index.html: dashboard structure and map overlays.
-- style.css: responsive visual system and cartographic UI.
-- script.js: map controls, geolocation, Open-Meteo requests, and forecast rendering.
-- app.py: optional Flask entry point.
-
-© 2025 Urban Heat Mapping | Concept by Amna Azeem and Md Jakir Hossain.# Urban Heat Mapping
-
-This project is a dynamic web application for visualizing urban microclimates, specifically focusing on urban heat islands and building footprints. It allows users to explore microclimate variations in a city and provides simulated environmental data. The application defaults to showing data for Lahore, Pakistan, but can be updated to the user's current location using geolocation.
+This project is a dynamic web application for visualizing urban microclimates, specifically focusing on urban heat islands and building form. It allows users to explore microclimate variations in Dhaka, Bangladesh using live Open-Meteo weather and air-quality data. The application defaults to Dhaka and can be updated to the user's current location using geolocation.
 
 
 WebMap: https://jakirhossaincde.github.io/UHM/
@@ -46,8 +10,12 @@ WebMap: https://jakirhossaincde.github.io/UHM/
 
 ## Features
 
-- **Heat Map Visualization**: Displays a color-coded map showing temperature variations across an urban area.
-- **Building Footprint Map**: Switches to a detailed map view highlighting building structures and density.
+- **Heat-Island Areas**: Displays labeled cooler, moderate, high, and very-high intensity zones across Dhaka. These are an illustrative visualization layer and should be replaced with validated thermal observations for scientific analysis.
+- **Urban Basemap**: Uses the Carto Voyager basemap for a clean, low-noise urban context suitable for reading climate overlays.
+- **Previous Map View**: Keeps the earlier Mapbox-based map style available as a basemap toggle.
+- **3D Building Atlas**: Opens the official GlobalBuildingAtlas viewer for building height and urban-form context.
+- **Point Weather Inspection**: Click any point on the map to retrieve its current weather and forecast.
+- **Forecast Modes**: Provides the next 12 hours and a seven-day forecast.
 - **Geolocation**: Automatically centers the map on the user's current location and updates the environmental data.
 - **Environmental Data Panel**: A real-time panel that provides simulated data for temperature, rainfall, air quality, and wind speed.
 - **Responsive Design**: The interface is designed to be fully functional and aesthetically pleasing on both desktop and mobile devices.
@@ -82,7 +50,10 @@ If you want to serve it using a local web server (useful for more complex projec
 -   **HTML5**: For the web page structure.
 -   **CSS3**: For all the styling, including the gradient background and responsive design.
 -   **JavaScript (ES6+)**: For dynamic functionality and user interactions.
--   **Mapbox**: The mapping platform used to render the heat map and building footprint layers.
+-   **Leaflet**: The interactive map engine and layer switching framework.
+-   **Carto Voyager**: The default urban-oriented basemap.
+-   **Mapbox**: Retained as the selectable previous map view.
+-   **Open-Meteo**: Live weather, forecast, and air-quality data.
 -   **Font Awesome**: For the icons used in the UI.
 
 ## Copyright
