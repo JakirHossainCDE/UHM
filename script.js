@@ -1,7 +1,6 @@
-const DHAKA = { lat: 23.8103, lon: 90.4125, name: 'Dhaka, Bangladesh' };
-const BANGLADESH = { lat: 23.685, lon: 90.3563, name: 'Bangladesh' };
+const GLOBAL_CENTER = { lat: 20, lon: 0, name: 'Global overview' };
 const weatherCodes = { 0:['Clear sky','fa-sun'], 1:['Mainly clear','fa-cloud-sun'], 2:['Partly cloudy','fa-cloud-sun'], 3:['Overcast','fa-cloud'], 45:['Foggy','fa-smog'], 48:['Rime fog','fa-smog'], 51:['Drizzle','fa-cloud-rain'], 53:['Drizzle','fa-cloud-rain'], 55:['Dense drizzle','fa-cloud-showers-heavy'], 61:['Light rain','fa-cloud-rain'], 63:['Rain','fa-cloud-showers-heavy'], 65:['Heavy rain','fa-cloud-showers-heavy'], 80:['Rain showers','fa-cloud-showers-heavy'], 81:['Rain showers','fa-cloud-showers-heavy'], 82:['Heavy showers','fa-cloud-showers-heavy'], 95:['Thunderstorm','fa-cloud-bolt'], 96:['Thunderstorm','fa-cloud-bolt'], 99:['Thunderstorm','fa-cloud-bolt'] };
-let selected = { ...DHAKA };
+let selected = { ...GLOBAL_CENTER };
 let weatherData = null;
 let map;
 let pointMarker;
@@ -11,11 +10,8 @@ let surfaceMetric = 'temperature';
 let baseLayers;
 let activeBaseLayer;
 let forecastRange = 'hourly';
-let boundaryGeometry = null;
-let boundaryLayer = null;
-const SURFACE_BOUNDS = { south: 18.30, north: 28.90, west: 85.50, east: 95.20 };
-const SURFACE_SIZE = 11;
-const BANGLADESH_BOUNDARY_URL = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/BGD/ADM0/geoBoundaries-BGD-ADM0.geojson';
+const SURFACE_BOUNDS = { south: -60, north: 75, west: -180, east: 180 };
+const SURFACE_SIZE = 13;
 const MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoidGVqYXMyIiwiYSI6ImNtOWppcHJsOTBlYzQyaXNiczV5cWMyYzUifQ.iu9NmyrnMSKEeGGtnuv8Tg';
 const surfaceDefinitions = {
     temperature: { label: 'Temperature', unit: '°C', min: 18, max: 42, low: 'Cooler', middle: 'Warm', high: 'Hotter' },
@@ -56,50 +52,6 @@ function surfaceUrl() {
         air: `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=us_aqi&timezone=Asia%2FDhaka`
     };
 }
-function pointInRing(point, ring) {
-    const [longitude, latitude] = point;
-    let inside = false;
-    for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index, index += 1) {
-        const [currentLongitude, currentLatitude] = ring[index];
-        const [previousLongitude, previousLatitude] = ring[previous];
-        const intersects = ((currentLatitude > latitude) !== (previousLatitude > latitude))
-            && (longitude < (previousLongitude - currentLongitude) * (latitude - currentLatitude) / (previousLatitude - currentLatitude) + currentLongitude);
-        if (intersects) inside = !inside;
-    }
-    return inside;
-}
-function pointInPolygon(point, polygon) {
-    return pointInRing(point, polygon[0]) && !polygon.slice(1).some(ring => pointInRing(point, ring));
-}
-function pointInBoundary(latitude, longitude) {
-    if (!boundaryGeometry) return true;
-    const polygons = boundaryGeometry.type === 'MultiPolygon' ? boundaryGeometry.coordinates : [boundaryGeometry.coordinates];
-    return polygons.some(polygon => pointInPolygon([longitude, latitude], polygon));
-}
-function cellTouchesBoundary(south, north, west, east) {
-    const samples = [
-        [(south + north) / 2, (west + east) / 2],
-        [south, west], [south, east], [north, west], [north, east],
-        [(south + north) / 2, west], [(south + north) / 2, east],
-        [south, (west + east) / 2], [north, (west + east) / 2]
-    ];
-    return samples.some(([latitude, longitude]) => pointInBoundary(latitude, longitude));
-}
-async function loadBoundary() {
-    try {
-        const response = await fetch(BANGLADESH_BOUNDARY_URL);
-        if (!response.ok) throw new Error('Bangladesh boundary unavailable');
-        const boundary = await response.json();
-        const feature = boundary.type === 'FeatureCollection' ? boundary.features[0] : boundary;
-        boundaryGeometry = feature.geometry;
-        boundaryLayer = L.geoJSON(feature, {
-            style: { color: '#073b4c', weight: 3, opacity: 1, fillColor: '#0f766e', fillOpacity: .08 },
-            interactive: false
-        }).addTo(map);
-    } catch (error) {
-        setText('dataStatus', 'Weather connected · country boundary unavailable');
-    }
-}
 function colorForValue(value, definition) {
     const ratio = Math.max(0, Math.min(1, (value - definition.min) / (definition.max - definition.min)));
     const stops = [[58, 134, 255], [0, 168, 150], [245, 158, 11], [239, 79, 63]];
@@ -138,7 +90,6 @@ function renderSurfaceLayer() {
         }
     }
     surfaceLayer = L.layerGroup(cells).addTo(map);
-    if (boundaryLayer) boundaryLayer.bringToFront();
 }
 async function loadSurfaceData() {
     try {
@@ -223,18 +174,19 @@ async function loadWeather() {
     }
 }
 async function initializeMap() {
-    map = L.map('map', { zoomControl: false, attributionControl: true, maxBounds: [[17.95, 85.15], [29.25, 95.55]], maxBoundsViscosity: .7 }).setView([BANGLADESH.lat, BANGLADESH.lon], 6);
+    map = L.map('map', { zoomControl: false, attributionControl: true, worldCopyJump: true, minZoom: 2 }).setView([GLOBAL_CENTER.lat, GLOBAL_CENTER.lon], 2);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     baseLayers = {
         leaflet: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }),
-        urban: L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/256/{z}/{x}/{y}?access_token=${MAPBOX_ACCESS_TOKEN}`, { maxZoom: 22, attribution: '&copy; Mapbox' }),
+        voyager: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }),
+        dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }),
+        topographic: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, attribution: '&copy; OpenStreetMap contributors, SRTM | OpenTopoMap' }),
         satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '&copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community' })
     };
     activeBaseLayer = baseLayers.leaflet.addTo(map);
-    await loadBoundary();
     loadSurfaceData();
     window.setInterval(loadSurfaceData, 60 * 60 * 1000);
-    setSelectedPoint(BANGLADESH.lat, BANGLADESH.lon, BANGLADESH.name);
+    setSelectedPoint(GLOBAL_CENTER.lat, GLOBAL_CENTER.lon, GLOBAL_CENTER.name);
     map.on('click', event => setSelectedPoint(event.latlng.lat, event.latlng.lng, `Point ${event.latlng.lat.toFixed(3)}°, ${event.latlng.lng.toFixed(3)}°`));
 }
 document.querySelectorAll('.forecast-tab').forEach(button => button.addEventListener('click', () => { forecastRange = button.dataset.range; document.querySelectorAll('.forecast-tab').forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-selected', item === button ? 'true' : 'false'); }); renderForecast(); }));
@@ -244,18 +196,8 @@ function switchBaseLayer(name) {
     if (activeBaseLayer === baseLayers[name]) return;
     map.removeLayer(activeBaseLayer);
     activeBaseLayer = baseLayers[name].addTo(map);
-    document.getElementById('satelliteMapBtn').classList.toggle('active', name === 'satellite');
-    document.getElementById('urbanSurfaceBtn').classList.toggle('active', name === 'urban');
 }
-document.getElementById('urbanSurfaceBtn').addEventListener('click', () => {
-    switchBaseLayer('urban');
-    if (!surfaceLayer) return;
-    if (!map.hasLayer(surfaceLayer)) {
-        surfaceLayer.addTo(map);
-    }
-    document.getElementById('urbanSurfaceBtn').classList.add('active');
-});
-document.getElementById('satelliteMapBtn').addEventListener('click', () => switchBaseLayer('satellite'));
+document.getElementById('baseMapSelect').addEventListener('change', event => switchBaseLayer(event.target.value));
 document.getElementById('atlasBtn').addEventListener('click', () => { document.getElementById('atlasModal').classList.add('open'); document.getElementById('atlasModal').setAttribute('aria-hidden', 'false'); });
 document.getElementById('closeAtlas').addEventListener('click', () => { document.getElementById('atlasModal').classList.remove('open'); document.getElementById('atlasModal').setAttribute('aria-hidden', 'true'); });
 document.getElementById('atlasModal').addEventListener('click', event => { if (event.target.id === 'atlasModal') document.getElementById('closeAtlas').click(); });

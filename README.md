@@ -1,20 +1,18 @@
-# Urban Heat Mapping
+# Global Microclimate Atlas
 
-This project is a dynamic web application for visualizing environmental conditions and urban microclimates across Bangladesh using live Open-Meteo weather and air-quality data. The application opens on a Bangladesh-wide map and can be updated to the user's current location using geolocation.
+This project is a dynamic web application for visualizing environmental conditions and microclimates around the world using live Open-Meteo weather and air-quality data. The application opens on a global map and can be updated to the user's current location using geolocation.
 
 
 WebMap: https://jakirhossaincde.github.io/UHM/
 
 ## Features
 
-- **Live Bangladesh Surface**: Displays a Bangladesh-wide interpolated grid surface. The layer selector supports temperature, wind speed, humidity, rain probability, and air quality.
+- **Global Live Surface**: Displays a global interpolated grid surface sampled across a world-scale analysis area. The layer selector supports temperature, wind speed, humidity, rain probability, and air quality.
 - **Live Surface Selector**: Switches the rendered surface between temperature, wind speed, humidity, rain probability, and air quality.
-- **Environmental Surface**: Switches from the default Leaflet/OpenStreetMap basemap to Mapbox Light with the live colored environmental surface, providing the urban heat-island indication layer. The live surface covers Bangladesh and an approximately 250 km surrounding analysis zone.
-- **Default Leaflet Basemap**: Opens with standard Leaflet/OpenStreetMap tiles; Mapbox Light is available through the `Environmental Surface` control.
-- **Satellite Imagery**: Provides an optional Esri World Imagery layer through the `Satellite imagery` button for visualizing land cover and built-up form.
-- **Exact Bangladesh Boundary**: Shows the high-resolution geoBoundaries ADM0 country outline over the buffered environmental surface.
-- **3D Building Atlas**: Opens the official GlobalBuildingAtlas viewer for building height and urban-form context across Bangladesh.
-- **Point Weather Inspection**: Click any point in Bangladesh to retrieve its current weather and forecast.
+- **Base map selector**: Switches between free OpenStreetMap, Carto Voyager, Carto Dark Matter, OpenTopoMap, and Esri World Imagery basemaps.
+- **Default OpenStreetMap**: Opens with standard OpenStreetMap tiles and requires no API key.
+- **Global point inspection**: Click any point on the world map to retrieve its current weather and forecast.
+- **3D Building Atlas**: Opens the official GlobalBuildingAtlas viewer for worldwide building-height and urban-form context.
 - **Forecast Modes**: Provides the next 12 hours and a seven-day forecast.
 - **Geolocation**: Automatically centers the map on the user's current location and updates the environmental data.
 - **Environmental Data Panel**: A real-time panel that provides live data for temperature, rainfall, air quality, humidity, and wind speed.
@@ -51,10 +49,9 @@ If you want to serve it using a local web server (useful for more complex projec
 -   **CSS3**: For all the styling, including the gradient background and responsive design.
 -   **JavaScript (ES6+)**: For dynamic functionality and user interactions.
 -   **Leaflet**: The interactive map engine and layer switching framework.
--   **Mapbox Light**: Selectable urban basemap used by the `Environmental Surface` control.
+-   **CARTO and OpenStreetMap**: Free selectable basemaps for urban and general geographic context.
 -   **OpenStreetMap**: Default Leaflet basemap.
 -   **Esri World Imagery**: Selectable satellite imagery basemap; attribution is shown on the map.
--   **geoBoundaries ADM0 GeoJSON**: High-resolution Bangladesh country outline and surface mask.
 -   **Open-Meteo**: Live weather, forecast, and air-quality data.
 -   **Font Awesome**: For the icons used in the UI.
 

@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Interactive Bangladesh weather, air quality, and urban microclimate atlas">
-    <title>Bangladesh Microclimate Atlas</title>
+    <meta name="description" content="Interactive global weather, air quality, and microclimate atlas">
+    <title>Global Microclimate Atlas</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -14,7 +14,7 @@
 </head>
 <body>
 <main class="app-shell">
-    <section class="map-shell" aria-label="Interactive Bangladesh environmental map">
+    <section class="map-shell" aria-label="Interactive global environmental map">
         <div id="map" role="application" aria-label="Click the map to inspect local weather"></div>
         <div class="map-wash" aria-hidden="true"></div>
 
@@ -23,7 +23,7 @@
                 <div class="brand-mark"><i class="fas fa-temperature-half"></i></div>
                 <div>
                     <p class="eyebrow">Urban climate intelligence</p>
-                    <h1>Bangladesh <span>Microclimate Atlas</span></h1>
+                    <h1>Global <span>Microclimate Atlas</span></h1>
                 </div>
             </div>
             <div class="topbar-actions">
@@ -35,7 +35,7 @@
         <aside class="weather-card glass-card" aria-live="polite">
             <div class="card-heading">
                 <div>
-                    <p class="eyebrow" id="selectedLocation">Bangladesh</p>
+                    <p class="eyebrow" id="selectedLocation">Global overview</p>
                     <h2 id="weatherSummary">Select a point</h2>
                 </div>
                 <i id="weatherIcon" class="fas fa-location-dot weather-icon"></i>
@@ -70,7 +70,7 @@
             <div class="forecast-list" id="forecastList"><span class="loading-line">Choose a point on the map.</span></div>
         </section>
 
-        <div class="map-help glass-card"><i class="fas fa-hand-pointer"></i> Click anywhere in Bangladesh to inspect weather</div>
+        <div class="map-help glass-card"><i class="fas fa-hand-pointer"></i> Click anywhere on the map to inspect weather</div>
         <div class="map-legend glass-card">
             <label class="layer-picker" for="surfaceLayer">Live layer
                 <select id="surfaceLayer" aria-label="Choose live map layer">
@@ -81,18 +81,24 @@
                     <option value="aqi">Air quality</option>
                 </select>
             </label>
-            <span class="boundary-label"><i class="fas fa-draw-polygon"></i> Bangladesh boundary</span>
-            <span class="map-attribution">© OpenStreetMap · Mapbox Light · Satellite: Esri</span>
+            <span class="map-attribution">Open-Meteo live data</span>
         </div>
 
         <nav class="map-controls glass-card" aria-label="Map controls">
-            <button class="map-control-button" id="urbanSurfaceBtn"><i class="fas fa-layer-group"></i><span>Environmental Surface</span></button>
-            <button class="map-control-button" id="satelliteMapBtn"><i class="fas fa-satellite"></i><span>Satellite imagery</span></button>
+            <label class="base-map-picker" for="baseMapSelect"><i class="fas fa-layer-group"></i><span>Base map</span>
+                <select id="baseMapSelect" aria-label="Choose base map">
+                    <option value="leaflet">OpenStreetMap</option>
+                    <option value="voyager">Carto Voyager</option>
+                    <option value="dark">Carto Dark Matter</option>
+                    <option value="topographic">OpenTopoMap</option>
+                    <option value="satellite">Esri satellite</option>
+                </select>
+            </label>
             <button class="map-control-button" id="atlasBtn"><i class="fas fa-cubes"></i><span>3D atlas</span></button>
             <button class="map-control-button" id="geolocation-btn"><i class="fas fa-location-crosshairs"></i><span>My location</span></button>
         </nav>
 
-        <footer><span>Bangladesh Microclimate Atlas</span><span>Weather: Open-Meteo · Default: Leaflet/OpenStreetMap · Urban: Mapbox Light · Satellite: Esri</span></footer>
+        <footer><span>Global Microclimate Atlas</span><span>Live weather and air quality by Open-Meteo</span></footer>
     </section>
 
     <aside class="atlas-modal" id="atlasModal" aria-hidden="true">
@@ -100,13 +106,13 @@
             <button class="close-button" id="closeAtlas" aria-label="Close 3D atlas panel"><i class="fas fa-xmark"></i></button>
             <p class="eyebrow"><i class="fas fa-cubes"></i> External 3D layer</p>
             <h2>GlobalBuildingAtlas</h2>
-            <p>Explore the official LoD1 building models from the TUM research project. Use the viewer to inspect building height and urban form across Bangladesh.</p>
+            <p>Explore the official LoD1 building models from the TUM research project. Use the viewer to inspect building height and urban form around the world.</p>
             <a class="primary-action" href="https://tubvsig-so2sat-vm1.srv.mwn.de/" target="_blank" rel="noopener noreferrer">Open 3D Atlas <i class="fas fa-arrow-up-right-from-square"></i></a>
             <p class="license-note">GlobalBuildingAtlas, TUM / Zhu et al. (2025). CC BY-NC 4.0.</p>
         </div>
     </aside>
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<script src="script.js?v=20261009-balanced-grid"></script>
+<script src="script.js?v=20261009-global-world"></script>
 </body>
 </html>
