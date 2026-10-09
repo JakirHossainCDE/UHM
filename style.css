@@ -5,6 +5,77 @@
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+
+body {
+    background: linear-gradient(135deg, #1a2a6c, #b21f1f, #1a2a6c);
+    color: #fff;
+    line-height: 1.6;
+    height: 100vh;
+    overflow: hidden;
+}
+
+
+.map-section {
+    height: 100vh;
+    position: relative;
+}
+
+
+.map-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 10;
+    padding: 15px 20px;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+
+
+.header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+.atlas-panel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(90%, 520px);
+    padding: 32px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.78);
+    border: 1px solid rgba(78, 205, 196, 0.7);
+    border-radius: 12px;
+    box-shadow: 0 10px 35px rgba(0, 0, 0, 0.35);
+    z-index: 2;
+}
+
+.atlas-panel h3 {
+    margin: 10px 0;
+    color: #4ecdc4;
+}
+
+.atlas-panel p {
+    margin-bottom: 20px;
+}
+
+.atlas-panel small {
+    display: block;
+    margin-top: 18px;
+    color: #d5eeee;
+    font-size: 0.75rem;
+}
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
 body {
     background: linear-gradient(135deg, #1a2a6c, #b21f1f, #1a2a6c);
     color: #fff;
