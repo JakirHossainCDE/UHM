@@ -225,10 +225,11 @@ async function initializeMap() {
     map = L.map('map', { zoomControl: false, attributionControl: true, maxBounds: [[17.95, 85.15], [29.25, 95.55]], maxBoundsViscosity: .7 }).setView([BANGLADESH.lat, BANGLADESH.lon], 6);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     baseLayers = {
+        leaflet: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }),
         urban: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '&copy; CARTO' }),
         satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '&copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community' })
     };
-    activeBaseLayer = baseLayers.urban.addTo(map);
+    activeBaseLayer = baseLayers.leaflet.addTo(map);
     await loadBoundary();
     loadSurfaceData();
     window.setInterval(loadSurfaceData, 60 * 60 * 1000);
@@ -243,15 +244,15 @@ function switchBaseLayer(name) {
     map.removeLayer(activeBaseLayer);
     activeBaseLayer = baseLayers[name].addTo(map);
     document.getElementById('satelliteMapBtn').classList.toggle('active', name === 'satellite');
-    document.getElementById('urbanLiveSurfaceBtn').classList.toggle('active', name === 'urban' && Boolean(surfaceLayer && map.hasLayer(surfaceLayer)));
+    document.getElementById('urbanSurfaceBtn').classList.toggle('active', name === 'urban');
 }
-document.getElementById('urbanLiveSurfaceBtn').addEventListener('click', () => {
+document.getElementById('urbanSurfaceBtn').addEventListener('click', () => {
     switchBaseLayer('urban');
     if (!surfaceLayer) return;
     if (!map.hasLayer(surfaceLayer)) {
         surfaceLayer.addTo(map);
     }
-    document.getElementById('urbanLiveSurfaceBtn').classList.add('active');
+    document.getElementById('urbanSurfaceBtn').classList.add('active');
 });
 document.getElementById('satelliteMapBtn').addEventListener('click', () => switchBaseLayer('satellite'));
 document.getElementById('atlasBtn').addEventListener('click', () => { document.getElementById('atlasModal').classList.add('open'); document.getElementById('atlasModal').setAttribute('aria-hidden', 'false'); });

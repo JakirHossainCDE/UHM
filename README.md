@@ -9,8 +9,8 @@ WebMap: https://jakirhossaincde.github.io/UHM/
 
 - **Live Bangladesh Surface**: Displays a Bangladesh-wide interpolated grid surface. The layer selector supports temperature, wind speed, humidity, rain probability, and air quality.
 - **Three-Step Map Legend**: Uses cooler/moderate/hotter-style color steps for the active surface variable, with variable-specific labels such as calm/breezy/windy or good/moderate/poor.
-- **Urban Live Surface**: Combines the original CARTO Voyager urban basemap with the live environmental surface. The live surface covers Bangladesh and an approximately 250 km surrounding analysis zone.
-- **No-Key Urban Basemap**: Uses CARTO Voyager tiles without a Mapbox token or other application key.
+- **Urban Surface**: Switches from the default Leaflet/OpenStreetMap basemap to the original CARTO Voyager urban basemap with the live environmental surface. The live surface covers Bangladesh and an approximately 250 km surrounding analysis zone.
+- **Default Leaflet Basemap**: Opens with standard Leaflet/OpenStreetMap tiles; the CARTO Voyager urban view is available through the `Urban Surface` control.
 - **Satellite Imagery**: Provides an optional Esri World Imagery layer through the `Satellite imagery` button for visualizing land cover and built-up form.
 - **Exact Bangladesh Boundary**: Shows the high-resolution geoBoundaries ADM0 country outline over the buffered environmental surface.
 - **3D Building Atlas**: Opens the official GlobalBuildingAtlas viewer for building height and urban-form context across Bangladesh.
@@ -51,7 +51,8 @@ If you want to serve it using a local web server (useful for more complex projec
 -   **CSS3**: For all the styling, including the gradient background and responsive design.
 -   **JavaScript (ES6+)**: For dynamic functionality and user interactions.
 -   **Leaflet**: The interactive map engine and layer switching framework.
--   **CARTO Voyager**: The default no-key urban basemap.
+-   **CARTO Voyager**: Selectable no-key urban basemap used by the `Urban Surface` control.
+-   **OpenStreetMap**: Default Leaflet basemap.
 -   **Esri World Imagery**: Selectable satellite imagery basemap; attribution is shown on the map.
 -   **geoBoundaries ADM0 GeoJSON**: High-resolution Bangladesh country outline and surface mask.
 -   **Open-Meteo**: Live weather, forecast, and air-quality data.
