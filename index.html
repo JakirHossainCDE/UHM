@@ -10,7 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
-    <link rel="stylesheet" href="style.css?v=20261009-country-outline">
+    <link rel="stylesheet" href="style.css?v=20261009-exact-boundary">
 </head>
 <body>
 <main class="app-shell">
@@ -87,6 +87,7 @@
 
         <nav class="map-controls glass-card" aria-label="Map controls">
             <button class="map-control-button active" id="heatLayerBtn"><i class="fas fa-temperature-high"></i><span>Live surface</span></button>
+            <button class="map-control-button active" id="urbanHeatBtn"><i class="fas fa-fire"></i><span>Urban heat islands</span></button>
             <button class="map-control-button active" id="urbanMapBtn"><i class="fas fa-city"></i><span>Urban map</span></button>
             <button class="map-control-button" id="satelliteMapBtn"><i class="fas fa-satellite"></i><span>Satellite imagery</span></button>
             <button class="map-control-button" id="atlasBtn"><i class="fas fa-cubes"></i><span>3D atlas</span></button>
@@ -108,6 +109,6 @@
     </aside>
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-<script src="script.js?v=20261009-country-outline"></script>
+<script src="script.js?v=20261009-exact-boundary"></script>
 </body>
 </html>

@@ -16,7 +16,7 @@ let boundaryGeometry = null;
 let boundaryLayer = null;
 const BANGLADESH_BOUNDS = { south: 20.55, north: 26.65, west: 88.00, east: 92.70 };
 const SURFACE_SIZE = 9;
-const BANGLADESH_BOUNDARY_URL = 'https://raw.githubusercontent.com/johan/world.geo.json/master/countries/BGD.geo.json';
+const BANGLADESH_BOUNDARY_URL = 'https://github.com/wmgeolab/geoBoundaries/raw/9469f09/releaseData/gbOpen/BGD/ADM0/geoBoundaries-BGD-ADM0.geojson';
 const surfaceDefinitions = {
     temperature: { label: 'Temperature', unit: '°C', min: 18, max: 42, low: 'Cooler', middle: 'Warm', high: 'Hotter' },
     wind: { label: 'Wind speed', unit: ' km/h', min: 0, max: 40, low: 'Calm', middle: 'Breezy', high: 'Windy' },
@@ -81,8 +81,9 @@ async function loadBoundary() {
         const response = await fetch(BANGLADESH_BOUNDARY_URL);
         if (!response.ok) throw new Error('Bangladesh boundary unavailable');
         const boundary = await response.json();
-        boundaryGeometry = boundary.geometry;
-        boundaryLayer = L.geoJSON(boundary, {
+        const feature = boundary.type === 'FeatureCollection' ? boundary.features[0] : boundary;
+        boundaryGeometry = feature.geometry;
+        boundaryLayer = L.geoJSON(feature, {
             style: { color: '#073b4c', weight: 3, opacity: 1, fillColor: '#0f766e', fillOpacity: .08 },
             interactive: false
         }).addTo(map);
@@ -208,7 +209,15 @@ async function loadWeather() {
     }
 }
 function buildHeatLayer() {
-    heatLayer = L.layerGroup().addTo(map);
+    const areas = [
+        { name: 'Dhaka urban heat island', color: '#d1495b', coordinates: [[23.70,90.32],[23.88,90.32],[23.93,90.48],[23.78,90.52],[23.66,90.44]] },
+        { name: 'Chattogram urban heat island', color: '#ef8354', coordinates: [[22.30,91.74],[22.42,91.72],[22.48,91.83],[22.34,91.89],[22.27,91.82]] },
+        { name: 'Rajshahi urban heat island', color: '#f4a261', coordinates: [[24.32,88.55],[24.42,88.57],[24.43,88.67],[24.34,88.70],[24.28,88.62]] },
+        { name: 'Khulna urban heat island', color: '#e76f51', coordinates: [[22.78,89.47],[22.86,89.48],[22.90,89.58],[22.80,89.62],[22.74,89.54]] }
+    ];
+    heatLayer = L.layerGroup(areas.map(area => L.polygon(area.coordinates, {
+        color: area.color, weight: 1.5, fillColor: area.color, fillOpacity: .23
+    }).bindTooltip(area.name, { sticky: true, className: 'heat-tooltip' }))).addTo(map);
 }
 async function initializeMap() {
     map = L.map('map', { zoomControl: false, attributionControl: true, maxBounds: [[20.2, 87.6], [27.1, 93.1]], maxBoundsViscosity: .7 }).setView([BANGLADESH.lat, BANGLADESH.lon], 7);
@@ -236,6 +245,15 @@ document.getElementById('heatLayerBtn').addEventListener('click', () => {
     } else {
         surfaceLayer.addTo(map);
         document.getElementById('heatLayerBtn').classList.add('active');
+    }
+});
+document.getElementById('urbanHeatBtn').addEventListener('click', () => {
+    if (map.hasLayer(heatLayer)) {
+        map.removeLayer(heatLayer);
+        document.getElementById('urbanHeatBtn').classList.remove('active');
+    } else {
+        heatLayer.addTo(map);
+        document.getElementById('urbanHeatBtn').classList.add('active');
     }
 });
 function switchBaseLayer(name) {

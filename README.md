@@ -15,7 +15,8 @@ WebMap: https://jakirhossaincde.github.io/UHM/
 - **Hourly Refresh**: The surface fetches a new Open-Meteo weather and air-quality grid automatically every hour. The `Live surface` button can hide or show it.
 - **No-Key Street Basemap**: Uses standard OpenStreetMap tiles without a Carto, Mapbox, or other API key.
 - **Satellite Imagery**: Provides an optional Esri World Imagery layer through the `Satellite imagery` button for visualizing land cover and built-up form.
-- **Bangladesh Boundary Surface**: The live environmental surface is clipped to the Bangladesh country boundary from the GeoJSON country dataset, rather than being displayed as a rectangular national extent.
+- **Exact Bangladesh Boundary**: The live environmental surface is clipped to the high-resolution geoBoundaries ADM0 country geometry, rather than being displayed as a rectangular national extent.
+- **Urban Heat-Island Areas**: Restores the original urban heat-island overlay as a separate toggle for major Bangladesh urban areas. It can be displayed over either the street or satellite basemap.
 - **3D Building Atlas**: Opens the official GlobalBuildingAtlas viewer for building height and urban-form context across Bangladesh.
 - **Point Weather Inspection**: Click any point in Bangladesh to retrieve its current weather and forecast.
 - **Forecast Modes**: Provides the next 12 hours and a seven-day forecast.
@@ -56,7 +57,7 @@ If you want to serve it using a local web server (useful for more complex projec
 -   **Leaflet**: The interactive map engine and layer switching framework.
 -   **OpenStreetMap**: The default no-key street basemap.
 -   **Esri World Imagery**: Selectable satellite imagery basemap; attribution is shown on the map.
--   **Bangladesh boundary GeoJSON**: Country outline and surface mask loaded from the public `world.geo.json` dataset.
+-   **geoBoundaries ADM0 GeoJSON**: High-resolution Bangladesh country outline and surface mask.
 -   **Open-Meteo**: Live weather, forecast, and air-quality data.
 -   **Font Awesome**: For the icons used in the UI.
 
