@@ -16,6 +16,7 @@ let boundaryLayer = null;
 const SURFACE_BOUNDS = { south: 18.30, north: 28.90, west: 85.50, east: 95.20 };
 const SURFACE_SIZE = 9;
 const BANGLADESH_BOUNDARY_URL = 'https://media.githubusercontent.com/media/wmgeolab/geoBoundaries/9469f09592ced973a3448cf66b6100b741b64c0d/releaseData/gbOpen/BGD/ADM0/geoBoundaries-BGD-ADM0.geojson';
+const MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoidGVqYXMyIiwiYSI6ImNtOWppcHJsOTBlYzQyaXNiczV5cWMyYzUifQ.iu9NmyrnMSKEeGGtnuv8Tg';
 const surfaceDefinitions = {
     temperature: { label: 'Temperature', unit: '°C', min: 18, max: 42, low: 'Cooler', middle: 'Warm', high: 'Hotter' },
     wind: { label: 'Wind speed', unit: ' km/h', min: 0, max: 40, low: 'Calm', middle: 'Breezy', high: 'Windy' },
@@ -226,7 +227,7 @@ async function initializeMap() {
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     baseLayers = {
         leaflet: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }),
-        urban: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19, attribution: '&copy; CARTO' }),
+        urban: L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/256/{z}/{x}/{y}?access_token=${MAPBOX_ACCESS_TOKEN}`, { maxZoom: 22, attribution: '&copy; Mapbox' }),
         satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '&copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community' })
     };
     activeBaseLayer = baseLayers.leaflet.addTo(map);
