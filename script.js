@@ -5,7 +5,6 @@ let selected = { ...DHAKA };
 let weatherData = null;
 let map;
 let pointMarker;
-let heatLayer;
 let surfaceLayer;
 let surfaceData = null;
 let surfaceMetric = 'temperature';
@@ -213,17 +212,6 @@ async function loadWeather() {
         setText('updatedAt', 'Try refreshing the data');
     }
 }
-function buildHeatLayer() {
-    const areas = [
-        { name: 'Dhaka urban heat island', color: '#d1495b', coordinates: [[23.70,90.32],[23.88,90.32],[23.93,90.48],[23.78,90.52],[23.66,90.44]] },
-        { name: 'Chattogram urban heat island', color: '#ef8354', coordinates: [[22.30,91.74],[22.42,91.72],[22.48,91.83],[22.34,91.89],[22.27,91.82]] },
-        { name: 'Rajshahi urban heat island', color: '#f4a261', coordinates: [[24.32,88.55],[24.42,88.57],[24.43,88.67],[24.34,88.70],[24.28,88.62]] },
-        { name: 'Khulna urban heat island', color: '#e76f51', coordinates: [[22.78,89.47],[22.86,89.48],[22.90,89.58],[22.80,89.62],[22.74,89.54]] }
-    ];
-    heatLayer = L.layerGroup(areas.map(area => L.polygon(area.coordinates, {
-        color: area.color, weight: 1.5, fillColor: area.color, fillOpacity: .23
-    }).bindTooltip(area.name, { sticky: true, className: 'heat-tooltip' }))).addTo(map);
-}
 async function initializeMap() {
     map = L.map('map', { zoomControl: false, attributionControl: true, maxBounds: [[20.2, 87.6], [27.1, 93.1]], maxBoundsViscosity: .7 }).setView([BANGLADESH.lat, BANGLADESH.lon], 7);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -232,7 +220,6 @@ async function initializeMap() {
         satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '&copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community' })
     };
     activeBaseLayer = baseLayers.urban.addTo(map);
-    buildHeatLayer();
     await loadBoundary();
     loadSurfaceData();
     window.setInterval(loadSurfaceData, 60 * 60 * 1000);
@@ -250,15 +237,6 @@ document.getElementById('heatLayerBtn').addEventListener('click', () => {
     } else {
         surfaceLayer.addTo(map);
         document.getElementById('heatLayerBtn').classList.add('active');
-    }
-});
-document.getElementById('urbanHeatBtn').addEventListener('click', () => {
-    if (map.hasLayer(heatLayer)) {
-        map.removeLayer(heatLayer);
-        document.getElementById('urbanHeatBtn').classList.remove('active');
-    } else {
-        heatLayer.addTo(map);
-        document.getElementById('urbanHeatBtn').classList.add('active');
     }
 });
 function switchBaseLayer(name) {

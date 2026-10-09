@@ -16,7 +16,6 @@ WebMap: https://jakirhossaincde.github.io/UHM/
 - **No-Key Street Basemap**: Uses standard OpenStreetMap tiles without a Carto, Mapbox, or other API key.
 - **Satellite Imagery**: Provides an optional Esri World Imagery layer through the `Satellite imagery` button for visualizing land cover and built-up form.
 - **Exact Bangladesh Boundary**: The live environmental surface is clipped to the high-resolution geoBoundaries ADM0 country geometry, rather than being displayed as a rectangular national extent.
-- **Urban Heat-Island Areas**: Restores the original urban heat-island overlay as a separate toggle for major Bangladesh urban areas. It can be displayed over either the street or satellite basemap.
 - **3D Building Atlas**: Opens the official GlobalBuildingAtlas viewer for building height and urban-form context across Bangladesh.
 - **Point Weather Inspection**: Click any point in Bangladesh to retrieve its current weather and forecast.
 - **Forecast Modes**: Provides the next 12 hours and a seven-day forecast.
