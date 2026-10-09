@@ -25,6 +25,109 @@
                 </div>
             </div>
             <div class="topbar-actions">
+                <span class="connection"><i class="live-dot"></i><span id="dataStatus">Live data connected</span></span>
+                <button class="icon-button" id="refreshWeather" aria-label="Refresh weather data" title="Refresh weather data"><i class="fas fa-rotate"></i></button>
+            </div>
+        </header>
+
+        <aside class="weather-card glass-card" aria-live="polite">
+            <div class="card-heading">
+                <div>
+                    <p class="eyebrow" id="selectedLocation">Dhaka, Bangladesh</p>
+                    <h2 id="weatherSummary">Drizzle</h2>
+                </div>
+                <i id="weatherIcon" class="fas fa-cloud-rain weather-icon"></i>
+            </div>
+            <div class="temperature-row">
+                <strong id="temperature">30°</strong>
+                <div>
+                    <span>Feels like <b id="feelsLike">32.7°C</b></span>
+                    <span id="updatedAt">Updated 19:30</span>
+                </div>
+            </div>
+            <div class="metric-grid">
+                <div><i class="fas fa-droplet"></i><span>Humidity</span><b id="humidity">57%</b></div>
+                <div><i class="fas fa-wind"></i><span>Wind</span><b id="wind">10.0 km/h</b></div>
+                <div><i class="fas fa-cloud-rain"></i><span>Rain chance</span><b id="rainfall">98%</b></div>
+                <div><i class="fas fa-smog"></i><span>Air quality</span><b id="airQuality">Poor</b></div>
+            </div>
+        </aside>
+
+        <section class="forecast-card glass-card">
+            <div class="section-heading">
+                <div>
+                    <p class="eyebrow">Selected location forecast</p>
+                    <h2>Weather outlook</h2>
+                </div>
+                <span class="source-label">Open-Meteo</span>
+            </div>
+            <div class="forecast-tabs" role="tablist" aria-label="Forecast range">
+                <button class="forecast-tab active" data-range="hourly" role="tab" aria-selected="true">Hourly</button>
+                <button class="forecast-tab" data-range="daily" role="tab" aria-selected="false">7 days</button>
+            </div>
+            <div class="forecast-list" id="forecastList"><div class="forecast-item current"><span>Now</span><i class="fas fa-cloud-rain"></i><strong>29°</strong><small>98% rain</small></div><div class="forecast-item "><span>21:00</span><i class="fas fa-cloud-rain"></i><strong>28°</strong><small>94% rain</small></div><div class="forecast-item "><span>22:00</span><i class="fas fa-cloud-rain"></i><strong>27°</strong><small>86% rain</small></div><div class="forecast-item "><span>23:00</span><i class="fas fa-cloud-rain"></i><strong>25°</strong><small>75% rain</small></div><div class="forecast-item "><span>00:00</span><i class="fas fa-cloud-rain"></i><strong>25°</strong><small>62% rain</small></div><div class="forecast-item "><span>01:00</span><i class="fas fa-sun"></i><strong>25°</strong><small>49% rain</small></div><div class="forecast-item "><span>02:00</span><i class="fas fa-sun"></i><strong>25°</strong><small>38% rain</small></div><div class="forecast-item "><span>03:00</span><i class="fas fa-sun"></i><strong>25°</strong><small>28% rain</small></div><div class="forecast-item "><span>04:00</span><i class="fas fa-sun"></i><strong>25°</strong><small>20% rain</small></div><div class="forecast-item "><span>05:00</span><i class="fas fa-cloud-sun"></i><strong>24°</strong><small>13% rain</small></div><div class="forecast-item "><span>06:00</span><i class="fas fa-cloud-sun"></i><strong>24°</strong><small>8% rain</small></div><div class="forecast-item "><span>07:00</span><i class="fas fa-cloud-sun"></i><strong>24°</strong><small>4% rain</small></div></div>
+        </section>
+
+        <div class="map-help glass-card"><i class="fas fa-hand-pointer"></i> Click anywhere in Dhaka to inspect weather</div>
+        <div class="map-legend glass-card">
+            <span><i class="legend-swatch cool"></i> Cooler</span>
+            <span><i class="legend-swatch warm"></i> Hotter</span>
+            <span class="map-attribution">Carto Voyager · © OpenStreetMap</span>
+        </div>
+
+        <nav class="map-controls glass-card" aria-label="Map controls">
+            <button class="map-control-button active" id="heatLayerBtn"><i class="fas fa-temperature-high"></i><span>Heat island</span></button>
+            <button class="map-control-button" id="urbanMapBtn"><i class="fas fa-city"></i><span>Urban map</span></button>
+            <button class="map-control-button active" id="previousMapBtn"><i class="fas fa-map"></i><span>Previous view</span></button>
+            <button class="map-control-button" id="atlasBtn"><i class="fas fa-cubes"></i><span>3D atlas</span></button>
+            <button class="map-control-button" id="geolocation-btn"><i class="fas fa-location-crosshairs"></i><span>My location</span></button>
+        </nav>
+
+        <footer><span>Dhaka Microclimate Atlas</span><span>Weather: Open-Meteo · Basemap: Carto Voyager</span></footer>
+    </section>
+
+    <aside class="atlas-modal" id="atlasModal" aria-hidden="true">
+        <div class="atlas-dialog glass-card">
+            <button class="close-button" id="closeAtlas" aria-label="Close 3D atlas panel"><i class="fas fa-xmark"></i></button>
+            <p class="eyebrow"><i class="fas fa-cubes"></i> External 3D layer</p>
+            <h2>GlobalBuildingAtlas</h2>
+            <p>Explore the official LoD1 building models from the TUM research project. Use the viewer to inspect building height and urban form around Dhaka.</p>
+            <a class="primary-action" href="https://tubvsig-so2sat-vm1.srv.mwn.de/" target="_blank" rel="noopener noreferrer">Open 3D Atlas <i class="fas fa-arrow-up-right-from-square"></i></a>
+            <p class="license-note">GlobalBuildingAtlas, TUM / Zhu et al. (2025). CC BY-NC 4.0.</p>
+        </div>
+    </aside>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script src="script.js"></script>
+
+
+</body></html><!doctype html><html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Interactive Dhaka urban heat island and microclimate atlas">
+    <title>Dhaka Microclimate Atlas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="app-shell">
+    <section class="map-shell" aria-label="Interactive Dhaka urban heat island map">
+        <div id="map" role="application" aria-label="Click the map to inspect local weather"></div>
+        <div class="map-wash" aria-hidden="true"></div>
+
+        <header class="topbar glass-card">
+            <div class="brand">
+                <div class="brand-mark"><i class="fas fa-temperature-half"></i></div>
+                <div>
+                    <p class="eyebrow">Urban climate intelligence</p>
+                    <h1>Dhaka <span>Microclimate Atlas</span></h1>
+                </div>
+            </div>
+            <div class="topbar-actions">
                 <span class="connection"><i class="live-dot"></i><span id="dataStatus">Ready</span></span>
                 <button class="icon-button" id="refreshWeather" aria-label="Refresh weather data" title="Refresh weather data"><i class="fas fa-rotate"></i></button>
             </div>
