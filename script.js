@@ -5,9 +5,21 @@ let weatherData = null;
 let map;
 let pointMarker;
 let heatLayer;
+let surfaceLayer;
+let surfaceData = null;
+let surfaceMetric = 'temperature';
 let baseLayers;
 let activeBaseLayer;
 let forecastRange = 'hourly';
+const DHAKA_BOUNDS = { south: 23.68, north: 23.95, west: 90.30, east: 90.55 };
+const SURFACE_SIZE = 7;
+const surfaceDefinitions = {
+    temperature: { label: 'Temperature', unit: '°C', min: 18, max: 42, low: 'Cooler', middle: 'Warm', high: 'Hotter' },
+    wind: { label: 'Wind speed', unit: ' km/h', min: 0, max: 40, low: 'Calm', middle: 'Breezy', high: 'Windy' },
+    humidity: { label: 'Humidity', unit: '%', min: 20, max: 100, low: 'Drier', middle: 'Moderate', high: 'Humid' },
+    rain: { label: 'Rain probability', unit: '%', min: 0, max: 100, low: 'Low chance', middle: 'Possible', high: 'Likely' },
+    aqi: { label: 'Air quality', unit: ' AQI', min: 0, max: 200, low: 'Good', middle: 'Moderate', high: 'Poor' }
+};
 
 function setText(id, value) { const element = document.getElementById(id); if (element) element.textContent = value; }
 function description(code) { return weatherCodes[code] || ['Variable conditions', 'fa-cloud-sun']; }
@@ -18,6 +30,93 @@ function apiUrl(lat, lon) {
     const weather = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=7&timezone=Asia%2FDhaka`;
     const air = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5&timezone=Asia%2FDhaka`;
     return { weather, air };
+}
+function surfaceCoordinates() {
+    const coordinates = [];
+    for (let row = 0; row < SURFACE_SIZE; row += 1) {
+        for (let column = 0; column < SURFACE_SIZE; column += 1) {
+            coordinates.push({
+                lat: DHAKA_BOUNDS.south + (DHAKA_BOUNDS.north - DHAKA_BOUNDS.south) * row / (SURFACE_SIZE - 1),
+                lon: DHAKA_BOUNDS.west + (DHAKA_BOUNDS.east - DHAKA_BOUNDS.west) * column / (SURFACE_SIZE - 1)
+            });
+        }
+    }
+    return coordinates;
+}
+function surfaceUrl() {
+    const coordinates = surfaceCoordinates();
+    const latitude = coordinates.map(point => point.lat.toFixed(4)).join(',');
+    const longitude = coordinates.map(point => point.lon.toFixed(4)).join(',');
+    return {
+        weather: `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m&hourly=precipitation_probability&forecast_days=1&timezone=Asia%2FDhaka`,
+        air: `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=us_aqi&timezone=Asia%2FDhaka`
+    };
+}
+function colorForValue(value, definition) {
+    const ratio = Math.max(0, Math.min(1, (value - definition.min) / (definition.max - definition.min)));
+    const stops = [[58, 134, 255], [0, 168, 150], [245, 158, 11], [239, 79, 63]];
+    const scaled = ratio * (stops.length - 1);
+    const index = Math.min(Math.floor(scaled), stops.length - 2);
+    const amount = scaled - index;
+    const start = stops[index];
+    const end = stops[index + 1];
+    const rgb = start.map((channel, position) => Math.round(channel + (end[position] - channel) * amount));
+    return `rgb(${rgb.join(',')})`;
+}
+function renderSurfaceLayer() {
+    if (!map || !surfaceData) return;
+    if (surfaceLayer) surfaceLayer.remove();
+    const definition = surfaceDefinitions[surfaceMetric];
+    const cells = [];
+    for (let row = 0; row < SURFACE_SIZE - 1; row += 1) {
+        for (let column = 0; column < SURFACE_SIZE - 1; column += 1) {
+            const index = row * SURFACE_SIZE + column;
+            const values = [index, index + 1, index + SURFACE_SIZE, index + SURFACE_SIZE + 1]
+                .map(pointIndex => surfaceData[pointIndex]?.[surfaceMetric])
+                .filter(value => Number.isFinite(value));
+            if (!values.length) continue;
+            const value = values.reduce((sum, item) => sum + item, 0) / values.length;
+            const south = DHAKA_BOUNDS.south + (DHAKA_BOUNDS.north - DHAKA_BOUNDS.south) * row / (SURFACE_SIZE - 1);
+            const north = DHAKA_BOUNDS.south + (DHAKA_BOUNDS.north - DHAKA_BOUNDS.south) * (row + 1) / (SURFACE_SIZE - 1);
+            const west = DHAKA_BOUNDS.west + (DHAKA_BOUNDS.east - DHAKA_BOUNDS.west) * column / (SURFACE_SIZE - 1);
+            const east = DHAKA_BOUNDS.west + (DHAKA_BOUNDS.east - DHAKA_BOUNDS.west) * (column + 1) / (SURFACE_SIZE - 1);
+            cells.push(L.rectangle([[south, west], [north, east]], {
+                color: colorForValue(value, definition),
+                weight: 0,
+                fillColor: colorForValue(value, definition),
+                fillOpacity: .34
+            }).bindTooltip(`${definition.label}: ${value.toFixed(1)}${definition.unit}`, { sticky: true, className: 'heat-tooltip' }));
+        }
+    }
+    surfaceLayer = L.layerGroup(cells).addTo(map);
+    setText('legendLow', definition.low);
+    setText('legendMiddle', definition.middle);
+    setText('legendHigh', definition.high);
+}
+async function loadSurfaceData() {
+    try {
+        const urls = surfaceUrl();
+        const [weatherResponse, airResponse] = await Promise.all([fetch(urls.weather), fetch(urls.air)]);
+        if (!weatherResponse.ok || !airResponse.ok) throw new Error('Surface data unavailable');
+        const weather = await weatherResponse.json();
+        const air = await airResponse.json();
+        const weatherPoints = Array.isArray(weather) ? weather : [weather];
+        const airPoints = Array.isArray(air) ? air : [air];
+        surfaceData = weatherPoints.map((point, index) => {
+            const current = point.current || {};
+            const hourIndex = Math.max((point.hourly?.time || []).findIndex(time => time >= current.time), 0);
+            return {
+                temperature: Number(current.temperature_2m),
+                wind: Number(current.wind_speed_10m),
+                humidity: Number(current.relative_humidity_2m),
+                rain: Number(point.hourly?.precipitation_probability?.[hourIndex] || 0),
+                aqi: Number(airPoints[index]?.current?.us_aqi)
+            };
+        });
+        renderSurfaceLayer();
+    } catch (error) {
+        setText('dataStatus', 'Point weather connected · map layer unavailable');
+    }
 }
 function renderHourly(hourly) {
     const now = hourly.time.findIndex(time => time >= weatherData.current.current.time);
@@ -72,28 +171,7 @@ async function loadWeather() {
     }
 }
 function buildHeatLayer() {
-    const points = [
-        [23.8103, 90.4125, 1.0, 'Central Dhaka · very high'],
-        [23.7806, 90.4071, .88, 'Dhanmondi · high'],
-        [23.7465, 90.376, .72, 'Lalbagh · moderate'],
-        [23.8379, 90.3617, .74, 'Mirpur · moderate'],
-        [23.8759, 90.3795, .6, 'Uttara · lower'],
-        [23.7621, 90.431, .82, 'Jatrabari · high'],
-        [23.7239, 90.395, .68, 'Keraniganj · moderate'],
-        [23.851, 90.401, .9, 'Gulshan · very high']
-    ];
-    heatLayer = L.layerGroup(points.map(([lat, lon, intensity, label]) => {
-        const color = intensity > .82 ? '#ef4f3f' : intensity > .68 ? '#f59e0b' : '#3a86ff';
-        return L.circle([lat, lon], {
-            radius: 900 + intensity * 650,
-            color,
-            weight: 1,
-            opacity: .55,
-            fillColor: color,
-            fillOpacity: .16 + intensity * .13
-        }).bindTooltip(label, { direction: 'top', className: 'heat-tooltip' });
-    }));
-    heatLayer.addTo(map);
+    heatLayer = L.layerGroup().addTo(map);
 }
 function initializeMap() {
     map = L.map('map', { zoomControl: false, attributionControl: true }).setView([DHAKA.lat, DHAKA.lon], 11);
@@ -104,12 +182,24 @@ function initializeMap() {
     };
     activeBaseLayer = baseLayers.urban.addTo(map);
     buildHeatLayer();
+    loadSurfaceData();
+    window.setInterval(loadSurfaceData, 60 * 60 * 1000);
     setSelectedPoint(DHAKA.lat, DHAKA.lon, DHAKA.name);
     map.on('click', event => setSelectedPoint(event.latlng.lat, event.latlng.lng, `Point ${event.latlng.lat.toFixed(3)}°, ${event.latlng.lng.toFixed(3)}°`));
 }
 document.querySelectorAll('.forecast-tab').forEach(button => button.addEventListener('click', () => { forecastRange = button.dataset.range; document.querySelectorAll('.forecast-tab').forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-selected', item === button ? 'true' : 'false'); }); renderForecast(); }));
+document.getElementById('surfaceLayer').addEventListener('change', event => { surfaceMetric = event.target.value; renderSurfaceLayer(); });
 document.getElementById('refreshWeather').addEventListener('click', loadWeather);
-document.getElementById('heatLayerBtn').addEventListener('click', () => { if (map.hasLayer(heatLayer)) { map.removeLayer(heatLayer); document.getElementById('heatLayerBtn').classList.remove('active'); } else { heatLayer.addTo(map); document.getElementById('heatLayerBtn').classList.add('active'); } });
+document.getElementById('heatLayerBtn').addEventListener('click', () => {
+    if (!surfaceLayer) return;
+    if (map.hasLayer(surfaceLayer)) {
+        map.removeLayer(surfaceLayer);
+        document.getElementById('heatLayerBtn').classList.remove('active');
+    } else {
+        surfaceLayer.addTo(map);
+        document.getElementById('heatLayerBtn').classList.add('active');
+    }
+});
 function switchBaseLayer(name) {
     if (activeBaseLayer === baseLayers[name]) return;
     map.removeLayer(activeBaseLayer);

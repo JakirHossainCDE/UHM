@@ -72,13 +72,23 @@
 
         <div class="map-help glass-card"><i class="fas fa-hand-pointer"></i> Click anywhere in Dhaka to inspect weather</div>
         <div class="map-legend glass-card">
-            <span><i class="legend-swatch cool"></i> Cooler</span>
-            <span><i class="legend-swatch warm"></i> Hotter</span>
+            <label class="layer-picker" for="surfaceLayer">Live layer
+                <select id="surfaceLayer" aria-label="Choose live map layer">
+                    <option value="temperature">Temperature</option>
+                    <option value="wind">Wind</option>
+                    <option value="humidity">Humidity</option>
+                    <option value="rain">Rain probability</option>
+                    <option value="aqi">Air quality</option>
+                </select>
+            </label>
+            <span><i class="legend-swatch cool"></i><span id="legendLow">Cooler</span></span>
+            <span><i class="legend-swatch middle"></i><span id="legendMiddle">Moderate</span></span>
+            <span><i class="legend-swatch warm"></i><span id="legendHigh">Hotter</span></span>
             <span class="map-attribution">Carto Voyager · © OpenStreetMap</span>
         </div>
 
         <nav class="map-controls glass-card" aria-label="Map controls">
-            <button class="map-control-button active" id="heatLayerBtn"><i class="fas fa-temperature-high"></i><span>Heat island</span></button>
+            <button class="map-control-button active" id="heatLayerBtn"><i class="fas fa-temperature-high"></i><span>Live surface</span></button>
             <button class="map-control-button active" id="urbanMapBtn"><i class="fas fa-city"></i><span>Urban map</span></button>
             <button class="map-control-button" id="previousMapBtn"><i class="fas fa-map"></i><span>Previous view</span></button>
             <button class="map-control-button" id="atlasBtn"><i class="fas fa-cubes"></i><span>3D atlas</span></button>

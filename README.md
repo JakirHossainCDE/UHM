@@ -10,14 +10,16 @@ WebMap: https://jakirhossaincde.github.io/UHM/
 
 ## Features
 
-- **Heat-Island Areas**: Displays labeled cooler, moderate, high, and very-high intensity zones across Dhaka. These are an illustrative visualization layer and should be replaced with validated thermal observations for scientific analysis.
+- **Live City-Wide Surface**: Replaces the former illustrative circles with a full Dhaka-area interpolated grid surface. The layer selector supports temperature, wind speed, humidity, rain probability, and air quality.
+- **Three-Step Map Legend**: Uses cooler/moderate/hotter-style color steps for the active surface variable, with variable-specific labels such as calm/breezy/windy or good/moderate/poor.
+- **Hourly Refresh**: The surface fetches a new Open-Meteo weather and air-quality grid automatically every hour. The `Live surface` button can hide or show it.
 - **Urban Basemap**: Uses the Carto Voyager basemap for a clean, low-noise urban context suitable for reading climate overlays.
 - **Previous Map View**: Keeps the earlier Mapbox-based map style available as a basemap toggle.
 - **3D Building Atlas**: Opens the official GlobalBuildingAtlas viewer for building height and urban-form context.
 - **Point Weather Inspection**: Click any point on the map to retrieve its current weather and forecast.
 - **Forecast Modes**: Provides the next 12 hours and a seven-day forecast.
 - **Geolocation**: Automatically centers the map on the user's current location and updates the environmental data.
-- **Environmental Data Panel**: A real-time panel that provides simulated data for temperature, rainfall, air quality, and wind speed.
+- **Environmental Data Panel**: A real-time panel that provides live data for temperature, rainfall, air quality, humidity, and wind speed.
 - **Responsive Design**: The interface is designed to be fully functional and aesthetically pleasing on both desktop and mobile devices.
 
 ## Project Structure
