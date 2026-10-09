@@ -1,4 +1,5 @@
 const DHAKA = { lat: 23.8103, lon: 90.4125, name: 'Dhaka, Bangladesh' };
+const BANGLADESH = { lat: 23.685, lon: 90.3563, name: 'Bangladesh' };
 const weatherCodes = { 0:['Clear sky','fa-sun'], 1:['Mainly clear','fa-cloud-sun'], 2:['Partly cloudy','fa-cloud-sun'], 3:['Overcast','fa-cloud'], 45:['Foggy','fa-smog'], 48:['Rime fog','fa-smog'], 51:['Drizzle','fa-cloud-rain'], 53:['Drizzle','fa-cloud-rain'], 55:['Dense drizzle','fa-cloud-showers-heavy'], 61:['Light rain','fa-cloud-rain'], 63:['Rain','fa-cloud-showers-heavy'], 65:['Heavy rain','fa-cloud-showers-heavy'], 80:['Rain showers','fa-cloud-showers-heavy'], 81:['Rain showers','fa-cloud-showers-heavy'], 82:['Heavy showers','fa-cloud-showers-heavy'], 95:['Thunderstorm','fa-cloud-bolt'], 96:['Thunderstorm','fa-cloud-bolt'], 99:['Thunderstorm','fa-cloud-bolt'] };
 let selected = { ...DHAKA };
 let weatherData = null;
@@ -11,8 +12,8 @@ let surfaceMetric = 'temperature';
 let baseLayers;
 let activeBaseLayer;
 let forecastRange = 'hourly';
-const DHAKA_BOUNDS = { south: 23.68, north: 23.95, west: 90.30, east: 90.55 };
-const SURFACE_SIZE = 7;
+const BANGLADESH_BOUNDS = { south: 20.55, north: 26.65, west: 88.00, east: 92.70 };
+const SURFACE_SIZE = 9;
 const surfaceDefinitions = {
     temperature: { label: 'Temperature', unit: '°C', min: 18, max: 42, low: 'Cooler', middle: 'Warm', high: 'Hotter' },
     wind: { label: 'Wind speed', unit: ' km/h', min: 0, max: 40, low: 'Calm', middle: 'Breezy', high: 'Windy' },
@@ -36,8 +37,8 @@ function surfaceCoordinates() {
     for (let row = 0; row < SURFACE_SIZE; row += 1) {
         for (let column = 0; column < SURFACE_SIZE; column += 1) {
             coordinates.push({
-                lat: DHAKA_BOUNDS.south + (DHAKA_BOUNDS.north - DHAKA_BOUNDS.south) * row / (SURFACE_SIZE - 1),
-                lon: DHAKA_BOUNDS.west + (DHAKA_BOUNDS.east - DHAKA_BOUNDS.west) * column / (SURFACE_SIZE - 1)
+                lat: BANGLADESH_BOUNDS.south + (BANGLADESH_BOUNDS.north - BANGLADESH_BOUNDS.south) * row / (SURFACE_SIZE - 1),
+                lon: BANGLADESH_BOUNDS.west + (BANGLADESH_BOUNDS.east - BANGLADESH_BOUNDS.west) * column / (SURFACE_SIZE - 1)
             });
         }
     }
@@ -76,10 +77,10 @@ function renderSurfaceLayer() {
                 .filter(value => Number.isFinite(value));
             if (!values.length) continue;
             const value = values.reduce((sum, item) => sum + item, 0) / values.length;
-            const south = DHAKA_BOUNDS.south + (DHAKA_BOUNDS.north - DHAKA_BOUNDS.south) * row / (SURFACE_SIZE - 1);
-            const north = DHAKA_BOUNDS.south + (DHAKA_BOUNDS.north - DHAKA_BOUNDS.south) * (row + 1) / (SURFACE_SIZE - 1);
-            const west = DHAKA_BOUNDS.west + (DHAKA_BOUNDS.east - DHAKA_BOUNDS.west) * column / (SURFACE_SIZE - 1);
-            const east = DHAKA_BOUNDS.west + (DHAKA_BOUNDS.east - DHAKA_BOUNDS.west) * (column + 1) / (SURFACE_SIZE - 1);
+            const south = BANGLADESH_BOUNDS.south + (BANGLADESH_BOUNDS.north - BANGLADESH_BOUNDS.south) * row / (SURFACE_SIZE - 1);
+            const north = BANGLADESH_BOUNDS.south + (BANGLADESH_BOUNDS.north - BANGLADESH_BOUNDS.south) * (row + 1) / (SURFACE_SIZE - 1);
+            const west = BANGLADESH_BOUNDS.west + (BANGLADESH_BOUNDS.east - BANGLADESH_BOUNDS.west) * column / (SURFACE_SIZE - 1);
+            const east = BANGLADESH_BOUNDS.west + (BANGLADESH_BOUNDS.east - BANGLADESH_BOUNDS.west) * (column + 1) / (SURFACE_SIZE - 1);
             cells.push(L.rectangle([[south, west], [north, east]], {
                 color: colorForValue(value, definition),
                 weight: 0,
@@ -174,7 +175,7 @@ function buildHeatLayer() {
     heatLayer = L.layerGroup().addTo(map);
 }
 function initializeMap() {
-    map = L.map('map', { zoomControl: false, attributionControl: true }).setView([DHAKA.lat, DHAKA.lon], 11);
+    map = L.map('map', { zoomControl: false, attributionControl: true, maxBounds: [[20.2, 87.6], [27.1, 93.1]], maxBoundsViscosity: .7 }).setView([BANGLADESH.lat, BANGLADESH.lon], 7);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
     baseLayers = {
         urban: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20, subdomains: 'abcd', attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }),
@@ -184,7 +185,7 @@ function initializeMap() {
     buildHeatLayer();
     loadSurfaceData();
     window.setInterval(loadSurfaceData, 60 * 60 * 1000);
-    setSelectedPoint(DHAKA.lat, DHAKA.lon, DHAKA.name);
+    setSelectedPoint(BANGLADESH.lat, BANGLADESH.lon, BANGLADESH.name);
     map.on('click', event => setSelectedPoint(event.latlng.lat, event.latlng.lng, `Point ${event.latlng.lat.toFixed(3)}°, ${event.latlng.lng.toFixed(3)}°`));
 }
 document.querySelectorAll('.forecast-tab').forEach(button => button.addEventListener('click', () => { forecastRange = button.dataset.range; document.querySelectorAll('.forecast-tab').forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-selected', item === button ? 'true' : 'false'); }); renderForecast(); }));
