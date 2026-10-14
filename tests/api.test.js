@@ -66,7 +66,7 @@ test('sample requests batch nine locations and cache the entire view', async () 
   const client = createClient({ fetcher: (...args) => { calls++; return fixtureFetch(...args); } });
   const points = sampleGrid({ south: 20, north: 26, west: 88, east: 94 });
   const first = await client.samples(points), second = await client.samples(points);
-  assert.equal(first.points.length, 9); assert.equal(first.partial, false); assert.equal(first, second); assert.equal(calls, 2);
+  assert.equal(first.points.length, 9); assert.equal(first.partial, false); assert.deepEqual(first, second); assert.equal(calls, 2);
   assert.equal(first.points[0].values.aqi, 72);
 });
 test('partial sample outages stay explicit, with missing fields preserved as null', async () => {
@@ -76,4 +76,23 @@ test('partial sample outages stay explicit, with missing fields preserved as nul
 test('sample size is bounded to avoid accidental bulk requests', async () => {
   const client = createClient({ fetcher: fixtureFetch });
   await assert.rejects(client.samples([]), /Invalid/); await assert.rejects(client.samples(Array(26).fill(PRESETS[0])), /Invalid/);
+});
+
+test('layer data carries rain amount, wind direction and supports forced refresh', async () => {
+  let calls = 0;
+  const client = createClient({ fetcher: (...args) => { calls++; return fixtureFetch(...args); } });
+  const result = await client.samples([PRESETS[0]]);
+  assert.equal(result.points[0].values.rain, 1.2);
+  assert.equal(result.points[0].direction, 45);
+  await client.samples([PRESETS[0]]); assert.equal(calls, 2);
+  await client.samples([PRESETS[0]], { force: true }); assert.equal(calls, 4);
+});
+test('cached values reuse the current display geometry when the same world is wrapped', async () => {
+  const client = createClient({ fetcher: fixtureFetch });
+  const point = { ...PRESETS[0], displayLon: 90.4125, bounds: [[23,90],[24,91]] };
+  await client.samples([point]);
+  const next = await client.samples([{ ...point, displayLon: 450.4125, bounds: [[23,450],[24,451]] }]);
+  assert.equal(next.points[0].displayLon, 450.4125);
+  assert.equal(next.points[0].bounds[0][1], 450);
+  assert.equal(next.points[0].values.temperature, 28);
 });

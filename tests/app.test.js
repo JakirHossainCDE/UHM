@@ -27,10 +27,11 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
   let map;
   const leafletMap = window.L.map;
   window.L.map = (...args) => { map = leafletMap(...args); return map; };
-  let mode = 'normal', calls = [], resolveSlow, geoCalls = 0, geoSuccess, geoFailure, download;
+  let mode = 'normal', calls = [], holdSamples = false, pendingSamples = [], resolveSlow, geoCalls = 0, geoSuccess, geoFailure, download;
   const fetcher = async (url, options) => {
     calls.push(String(url));
     const u = new URL(url), weather = u.hostname === 'api.open-meteo.com';
+    if (holdSamples && u.searchParams.get('latitude')?.includes(',')) return new Promise(resolve => pendingSamples.push(() => resolve(fixtureFetch(url, options))));
     if (mode === 'weather-failure' && weather) return jsonResponse({}, 503);
     if (mode === 'air-failure' && u.hostname.startsWith('air-quality')) return jsonResponse({}, 503);
     if (mode === 'search-html' && u.hostname.startsWith('geocoding')) return jsonResponse({ results: [{ name: '<img src=x onerror=alert(1)>', country: '<script>bad</script>', latitude: 51, longitude: 1 }] });
@@ -70,14 +71,17 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
       points[0].dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
       assert.equal(points[1].getAttribute('tabindex'), '0'); assert.match($('chartReadout').textContent, /Rain/);
     });
-    await t.test('theme preference and atlas basemap change together', () => {
+    await t.test('theme preference switches between free light and dark maps', () => {
       $('themeToggle').click(); assert.equal(document.documentElement.dataset.theme, 'dark'); assert.equal(localStorage.getItem('uhm-theme'), 'dark');
       assert.match($('themeToggle').getAttribute('aria-label'), /light/);
-      assert(document.querySelector('.leaflet-tile[src*="dark_all"]'));
+      assert.equal($('map').dataset.basemap, 'dark');
+      assert.equal($('basemapSelect').value, 'dark');
+      assert(document.querySelector('.leaflet-tile[src*="tile.openstreetmap.org"]'));
+      assert.equal(document.querySelector('#basemapSelect option[value=atlas]'), null);
       $('themeToggle').click(); assert.equal(document.documentElement.dataset.theme, 'light');
     });
     await t.test('satellite and street basemaps are genuinely selectable', () => {
-      for (const [base, fragment] of [['satellite', 'World_Imagery'], ['streets', 'tile.openstreetmap.org'], ['atlas', 'light_all']]) {
+      for (const [base, fragment] of [['satellite', 'World_Imagery'], ['streets', 'tile.openstreetmap.org'], ['dark', 'tile.openstreetmap.org'], ['light', 'tile.openstreetmap.org']]) {
         $('basemapSelect').value = base; $('basemapSelect').dispatchEvent(new window.Event('change'));
         assert(document.querySelector(`.leaflet-tile[src*="${fragment}"]`));
       }
@@ -87,13 +91,69 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
       assert.equal($('legendUnit').textContent, 'km/h'); assert.equal(calls.length, count);
       click('[data-metric=temperature]');
     });
-    await t.test('view sampling adds nine real-data markers and clearing removes them', async () => {
+    await t.test('indicator layers draw sixteen sample cells and values, with working display controls', async () => {
       $('sampleButton').click(); await settle(() => !$('sampleButton').disabled);
-      assert.equal(document.querySelectorAll('.climate-marker').length, 10);
-      assert.match($('sampleSummary').textContent, /9 of 9/);
+      assert.equal(document.querySelectorAll('.climate-marker').length, 17);
+      assert.equal(document.querySelectorAll('.layer-cell').length, 16);
+      assert.match($('sampleSummary').textContent, /16 of 16/);
       const count = calls.length; click('[data-metric=aqi]'); assert.equal(calls.length, count);
+      const callsBefore = calls.length;
+      for (const [metric, unit] of [['temperature','°C'], ['humidity','%'], ['wind','km/h'], ['rain','mm'], ['aqi','AQI']]) {
+        click(`[data-metric=${metric}]`);
+        assert.equal($('legendUnit').textContent, unit);
+        assert.equal(document.querySelectorAll('.layer-cell').length, 16);
+        if (metric === 'wind') {
+          assert.equal(document.querySelectorAll('.sample-marker .wind-arrow').length, 16);
+          assert.equal(document.querySelector('.wind-arrow').style.getPropertyValue('--wind-rotation'), '225deg');
+        }
+        if (metric === 'rain') assert.match(document.querySelector('.sample-marker').textContent, /1\.2mm/);
+      }
+      assert.equal(calls.length, callsBefore, 'Switching all five layers reuses loaded values');
+      $('layerOpacity').value = '75'; $('layerOpacity').dispatchEvent(new window.Event('input'));
+      assert.equal($('opacityValue').textContent, '75%');
+      assert.equal(document.querySelector('.layer-cell').getAttribute('fill-opacity'), '0.75');
+      $('showValues').checked = false; $('showValues').dispatchEvent(new window.Event('change'));
+      assert.equal(document.querySelectorAll('.sample-marker').length, 0);
+      assert.equal(document.querySelectorAll('.layer-cell').length, 16);
+      $('layerVisible').checked = false; $('layerVisible').dispatchEvent(new window.Event('change'));
+      assert.equal(document.querySelectorAll('.layer-cell').length, 0);
+      $('layerVisible').checked = true; $('layerVisible').dispatchEvent(new window.Event('change'));
+      assert.equal(document.querySelectorAll('.layer-cell').length, 16);
+      $('showValues').checked = true; $('showValues').dispatchEvent(new window.Event('change'));
       $('clearSamples').click(); assert.equal(document.querySelectorAll('.climate-marker').length, 1);
+      assert.equal(document.querySelectorAll('.layer-cell').length, 0);
+      assert.equal($('autoUpdate').checked, false);
       click('[data-metric=temperature]');
+    });
+    await t.test('moving the map aborts stale layer loads; auto-update refreshes only the latest view', async () => {
+      holdSamples = true; $('sampleButton').click();
+      await settle(() => pendingSamples.length === 2);
+      map.setView([35, 105], 7);
+      holdSamples = false; pendingSamples.splice(0).forEach(resolve => resolve());
+      await delay(15);
+      assert.equal(document.querySelectorAll('.layer-cell').length, 0, 'Old viewport response must not draw');
+      assert.equal($('sampleButton').disabled, false);
+      const count = calls.length;
+      map.setView([36, 106], 7);
+      await delay(30); assert.equal(calls.length, count, 'Paused auto-update must not request');
+      const now = Date.now; Date.now = () => now() + 9000;
+      try {
+        $('autoUpdate').checked = true; $('autoUpdate').dispatchEvent(new window.Event('change'));
+        map.setView([37, 107], 7); map.setView([38, 108], 7);
+        await delay(1000);
+        await settle(() => document.querySelectorAll('.layer-cell').length === 16);
+        assert.equal(calls.length, count + 2, 'Rapid pans should produce one batched weather/air pair');
+        assert.match($('sampleSummary').textContent, /16 of 16/);
+      } finally { Date.now = now; }
+      $('clearSamples').click();
+    });
+    await t.test('the original map layout supports hiding panels and opening comparisons', () => {
+      assert(document.querySelector('.topbar')); assert(document.querySelector('.weather-panel'));
+      assert.equal(document.querySelector('.intro'), null);
+      $('panelsToggle').click(); assert($('explorer').classList.contains('panels-hidden'));
+      $('panelsToggle').click(); assert(!$('explorer').classList.contains('panels-hidden'));
+      $('openComparison').click(); assert.equal($('comparisonDialog').open, true);
+      $('closeComparison').click(); assert.equal($('comparisonDialog').open, false);
     });
     await t.test('comparisons add, load and remove places with a three-place limit', async () => {
       $('compareButton').click(); assert.equal($('compareCount').textContent, '1 / 3'); assert.equal($('compareButton').disabled, true);
@@ -102,6 +162,7 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
       assert.equal($('compareCount').textContent, '3 / 3'); assert.equal(document.querySelectorAll('.compare-place').length, 3);
       assert.equal($('comparisonSuggestions').hidden, true);
       click('[aria-label="Remove Rome from comparison"]'); assert.equal($('compareCount').textContent, '2 / 3');
+      $('closeComparison').click();
     });
     await t.test('failed comparison refresh retains and clearly labels the previous snapshot', async () => {
       mode = 'weather-failure'; click('[aria-label="Refresh Dhaka comparison"]');

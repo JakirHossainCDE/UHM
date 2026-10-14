@@ -9,8 +9,8 @@ export const METRICS = {
   temperature: { label: 'Air temperature', short: 'Temperature', unit: '°C', min: -10, max: 40, colors: ['#6f9ac6', '#91c5c6', '#d6dfae', '#edba77', '#d77462'], ticks: ['−10°', '15°', '40°+'] },
   humidity: { label: 'Relative humidity', short: 'Humidity', unit: '%', min: 0, max: 100, colors: ['#efe1b1', '#c6d8ad', '#95c9b5', '#6baea9', '#6692ad'], ticks: ['0%', '50%', '100%'] },
   wind: { label: 'Wind at 10 m', short: 'Wind', unit: 'km/h', min: 0, max: 60, colors: ['#cfe0ce', '#aad0ce', '#83b6c9', '#8b9fca', '#aa8cba'], ticks: ['0', '30', '60+'] },
-  rain: { label: 'Rain probability · current hour', short: 'Rain chance', unit: '%', min: 0, max: 100, colors: ['#e1e8dd', '#bcd8cd', '#8dbfc7', '#80a5ce', '#7c8eb5'], ticks: ['0%', '50%', '100%'] },
-  aqi: { label: 'U.S. Air Quality Index', short: 'Air quality', unit: 'AQI', min: 0, max: 300, colors: ['#a8c99b', '#e2d183', '#e6aa76', '#d98179', '#b396bb'], ticks: ['0', '150', '300+'] },
+  rain: { label: 'Hourly precipitation', short: 'Rain', unit: 'mm', min: 0, max: 10, colors: ['#eff5ed', '#9ed9c9', '#5aacc7', '#5678cb', '#9455ae'], ticks: ['0', '5', '10+'] },
+  aqi: { label: 'U.S. Air Quality Index', short: 'Air quality', unit: 'AQI', min: 0, max: 500, colors: ['#a8c99b', '#e2d183', '#e6aa76', '#d98179', '#b396bb', '#c8869e'], ticks: ['0', '250', '500+'], gradient: 'linear-gradient(to right,#a8c99b 0% 10%,#e2d183 10% 20%,#e6aa76 20% 30%,#d98179 30% 40%,#b396bb 40% 60%,#c8869e 60% 100%)' },
 };
 
 export const isNumber = value => typeof value === 'number' && Number.isFinite(value);
@@ -47,13 +47,13 @@ export function parseView(search) {
   const zoom = Number(params.get('zoom'));
   return {
     place,
-    zoom: params.has('zoom') && Number.isFinite(zoom) ? clamp(zoom, 2, 18) : 10,
+    zoom: params.has('zoom') && Number.isFinite(zoom) ? clamp(zoom, 2, 18) : 7,
     metric: Object.hasOwn(METRICS, params.get('metric')) ? params.get('metric') : 'temperature',
-    basemap: ['atlas', 'streets', 'satellite', 'terrain'].includes(params.get('base')) ? params.get('base') : 'atlas',
+    basemap: ['light', 'dark', 'streets', 'satellite', 'terrain'].includes(params.get('base')) ? params.get('base') : 'light',
   };
 }
 
-export function shareURL(base, place, { zoom = 10, metric = 'temperature', basemap = 'atlas' } = {}) {
+export function shareURL(base, place, { zoom = 7, metric = 'temperature', basemap = 'light' } = {}) {
   const url = new URL(base);
   url.search = '';
   url.hash = '';
@@ -118,6 +118,11 @@ export function windDirection(degrees) {
 export function metricColor(value, metric = 'temperature') {
   const spec = METRICS[metric] || METRICS.temperature;
   if (!isNumber(value)) return '#b4bcb6';
+  if (metric === 'aqi') {
+    if (value < 0) return '#b4bcb6';
+    const index = [50, 100, 150, 200, 300, Infinity].findIndex(limit => Math.round(value) <= limit);
+    return spec.colors[index];
+  }
   const position = clamp((value - spec.min) / (spec.max - spec.min), 0, 1) * (spec.colors.length - 1);
   const index = Math.min(Math.floor(position), spec.colors.length - 2);
   const fraction = position - index;
@@ -141,12 +146,27 @@ export function sampleGrid({ south, north, west, east }, size = 3) {
   }));
 }
 
+/** Display cells show the value sampled at their centre, not native model pixels. */
+export function sampleCells(bounds, size = 4) {
+  const points = sampleGrid(bounds, size);
+  const south = clamp(bounds.south, -85, 85), north = clamp(bounds.north, -85, 85);
+  let east = bounds.east;
+  if (east < bounds.west) east += Math.ceil((bounds.west - east) / 360) * 360;
+  const span = Math.min(east - bounds.west, 360), west = (east + bounds.west) / 2 - span / 2;
+  return points.map((point, i) => {
+    const row = Math.floor(i / size), col = i % size;
+    return { ...point, displayLon: west + (col + .5) / size * span,
+      bounds: [[south + row / size * (north - south), west + col / size * span],
+        [south + (row + 1) / size * (north - south), west + (col + 1) / size * span]] };
+  });
+}
+
 export function normalizeWeather(weather, air = null, retrievedAt = Date.now()) {
   if (!weather || !isNumber(weather.current?.time) || !Array.isArray(weather.hourly?.time)) throw new Error('The weather service returned incomplete data. Please retry.');
   const c = weather.current;
   const hourly = weather.hourly.time.map((time, i) => ({
     time: numeric(time), temperature: numeric(weather.hourly.temperature_2m?.[i]),
-    rain: numeric(weather.hourly.precipitation_probability?.[i]), humidity: numeric(weather.hourly.relative_humidity_2m?.[i]),
+    rain: numeric(weather.hourly.precipitation_probability?.[i]), rainfall: numeric(weather.hourly.precipitation?.[i]), humidity: numeric(weather.hourly.relative_humidity_2m?.[i]),
     wind: numeric(weather.hourly.wind_speed_10m?.[i]), code: numeric(weather.hourly.weather_code?.[i]),
   })).filter(row => row.time !== null);
   const nearHour = hourly.find(row => row.time >= Math.floor(c.time / 3600) * 3600);
@@ -156,7 +176,7 @@ export function normalizeWeather(weather, air = null, retrievedAt = Date.now()) 
     current: {
       time: c.time, temperature: numeric(c.temperature_2m), feels: numeric(c.apparent_temperature),
       humidity: numeric(c.relative_humidity_2m), wind: numeric(c.wind_speed_10m), direction: numeric(c.wind_direction_10m),
-      precipitation: numeric(c.precipitation), rain: nearHour?.rain ?? null, code: numeric(c.weather_code), isDay: numeric(c.is_day),
+      precipitation: numeric(c.precipitation), rain: nearHour?.rain ?? null, rainfall: nearHour?.rainfall ?? null, rainTime: nearHour?.time ?? null, code: numeric(c.weather_code), isDay: numeric(c.is_day),
       aqi: numeric(air?.current?.us_aqi), pm25: numeric(air?.current?.pm2_5), airTime: numeric(air?.current?.time),
     },
     hourly,

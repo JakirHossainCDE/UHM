@@ -1,4 +1,4 @@
-import { numeric, normalizeWeather, locationKey, validCoordinates } from './core.js';
+import { numeric, normalizeWeather, locationKey, validCoordinates } from './core.js?v=2.1.0';
 
 const WEATHER = 'https://api.open-meteo.com/v1/forecast';
 const AIR = 'https://air-quality-api.open-meteo.com/v1/air-quality';
@@ -33,7 +33,7 @@ export function weatherURL(place) {
   const url = new URL(WEATHER);
   url.search = new URLSearchParams({ latitude: place.lat.toFixed(4), longitude: place.lon.toFixed(4),
     current: 'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_direction_10m,precipitation',
-    hourly: 'temperature_2m,precipitation_probability,relative_humidity_2m,wind_speed_10m,weather_code',
+    hourly: 'temperature_2m,precipitation_probability,precipitation,relative_humidity_2m,wind_speed_10m,weather_code',
     daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
     timezone: 'auto', timeformat: 'unixtime', forecast_days: '7', temperature_unit: 'celsius', wind_speed_unit: 'kmh', precipitation_unit: 'mm',
   });
@@ -77,14 +77,14 @@ export function createClient({ fetcher = fetch, now = Date.now } = {}) {
         country: String(row.country || '').slice(0, 80), admin: String(row.admin1 || '').slice(0, 80),
       }));
     },
-    async samples(points, { signal } = {}) {
+    async samples(points, { signal, force = false } = {}) {
       if (!points.length || points.length > 25 || points.some(p => !validCoordinates(p.lat, p.lon))) throw new Error('Invalid sample locations');
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       const key = points.map(locationKey).join(';'), hit = cached(sampleCache, key);
-      if (hit) return hit;
+      if (!force && hit) return { ...hit, points: hit.points.map((point, i) => ({ ...point, ...points[i] })) };
       const coordinates = { latitude: points.map(p => p.lat).join(','), longitude: points.map(p => p.lon).join(','), timeformat: 'unixtime', timezone: 'GMT' };
       const weatherURL = new URL(WEATHER), airURL = new URL(AIR);
-      weatherURL.search = new URLSearchParams({ ...coordinates, current: 'temperature_2m,relative_humidity_2m,wind_speed_10m', hourly: 'precipitation_probability', forecast_hours: '1', wind_speed_unit: 'kmh' });
+      weatherURL.search = new URLSearchParams({ ...coordinates, current: 'temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m', hourly: 'precipitation', forecast_hours: '1', wind_speed_unit: 'kmh', precipitation_unit: 'mm' });
       airURL.search = new URLSearchParams({ ...coordinates, current: 'us_aqi' });
       const [weather, air] = await Promise.allSettled([get(weatherURL.href, signal), get(airURL.href, signal)]);
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -94,8 +94,9 @@ export function createClient({ fetcher = fetch, now = Date.now } = {}) {
       const result = {
         retrievedAt: now(), partial: weather.status === 'rejected' || air.status === 'rejected',
         points: points.map((place, i) => ({ ...place,
-          time: numeric(ws[i]?.current?.time), airTime: numeric(as[i]?.current?.time),
-          values: { temperature: numeric(ws[i]?.current?.temperature_2m), humidity: numeric(ws[i]?.current?.relative_humidity_2m), wind: numeric(ws[i]?.current?.wind_speed_10m), rain: numeric(ws[i]?.hourly?.precipitation_probability?.[0]), aqi: numeric(as[i]?.current?.us_aqi) },
+          time: numeric(ws[i]?.current?.time), airTime: numeric(as[i]?.current?.time), rainTime: numeric(ws[i]?.hourly?.time?.[0]), direction: numeric(ws[i]?.current?.wind_direction_10m),
+          modelLat: numeric(ws[i]?.latitude), modelLon: numeric(ws[i]?.longitude),
+          values: { temperature: numeric(ws[i]?.current?.temperature_2m), humidity: numeric(ws[i]?.current?.relative_humidity_2m), wind: numeric(ws[i]?.current?.wind_speed_10m), rain: numeric(ws[i]?.hourly?.precipitation?.[0]), aqi: numeric(as[i]?.current?.us_aqi) },
         })),
       };
       put(sampleCache, key, result);

@@ -13,16 +13,17 @@ Source: https://leafletjs.com/ and https://github.com/Leaflet/Leaflet/tree/v1.9.
 - Weather / geocoding delivery: [Open-Meteo](https://open-meteo.com/) (data under CC BY 4.0; API access subject to provider terms).
 - Air quality: [Copernicus Atmosphere Monitoring Service](https://atmosphere.copernicus.eu/) forecasts through Open-Meteo.
 - Place names: [GeoNames](https://www.geonames.org/).
-- Atlas basemap: [CARTO](https://carto.com/attributions), based on OpenStreetMap.
-- Streets: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
+- Light, dark and street maps: © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright).
 - Satellite context: Esri World Imagery; Esri, Vantor, Earthstar Geographics and the GIS User Community.
 - Topography: [OpenTopoMap](https://opentopomap.org/about), OpenStreetMap and SRTM (CC BY-SA).
-- Typefaces: Manrope and IBM Plex Mono, requested from Google Fonts; system fonts are used if unavailable.
+- Typefaces: DM Sans and Space Grotesk, requested from Google Fonts; system fonts are used if unavailable.
 
 Provider attribution remains visible on the map, in the footer and in the
 methodology dialog. Each basemap is subject to its provider's terms. There is no
 bulk tile downloading, offline tile cache or background map prefetching.
 
-The original project report is preserved unmodified. The external
-GlobalBuildingAtlas viewer remains a separate research resource, not an embedded
-or redistributed dataset.
+The original project report is preserved unmodified.
+Light and dark presentation styles are applied only to the OpenStreetMap tile
+pane. Attribution and indicator colours are not filtered. Use complies with the
+[OpenStreetMap tile usage policy](https://operations.osmfoundation.org/policies/tiles/);
+there is no API key, guaranteed service level or offline download feature.

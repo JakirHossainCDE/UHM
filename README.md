@@ -1,24 +1,30 @@
-# UHM — Urban Climate Atlas
+# UHM — Urban Climate Explorer
 
-**Your city. A closer look.** An interactive, open-data explorer of modelled
+A full-screen map with the original frosted weather and forecast panels.
+An interactive, open-data explorer of modelled
 weather and air quality, developed from the Urban Heat Mapping project by
 **Amna Azeem and Md Jakir Hossain**.
 
-**[Open the atlas →](https://jakirhossaincde.github.io/UHM/)**
+**[Open the explorer →](https://jakirhossaincde.github.io/UHM/)**
 
 ## Explore
 
 - **Find a place:** search cities worldwide, enter `latitude, longitude`, select
   Dhaka / Rome / Salzburg, click the map, or inspect its centre using the keyboard.
-- **Choose your context:** theme-aware CARTO atlas, OpenStreetMap streets, Esri
-  satellite imagery, or OpenTopoMap terrain. Light and dark themes remember your
-  preference.
+- **Choose your context:** free OpenStreetMap light and dark maps, regular
+  OpenStreetMap, Esri satellite imagery, or OpenTopoMap terrain. Light/dark
+  display styling affects only basemap tiles, never indicator colours. No map
+  API key is required. Theme preferences are remembered.
 - **Inspect conditions:** modelled air temperature, feels-like temperature,
   humidity, wind, rain probability, U.S. AQI and PM₂.₅. Model timestamps and
   retrieval times are separate; each place uses its own timezone.
-- **Sample the view:** request a discrete 3 × 3 grid of model estimates. Switch
-  between temperature, humidity, wind, rain probability and AQI. No interpolation
-  or synthetic continuous heat surface is drawn.
+- **Explore five indicator layers:** temperature (°C), humidity (%), wind
+  (km/h with direction arrows), hourly precipitation (mm), and U.S. AQI. A 4 × 4
+  display grid shows 16 real model samples. Each cell represents its centre
+  sample, not a native model pixel or an interpolated surface.
+- **Control the map:** adjust layer opacity, hide values or the overlay, pause
+  automatic updates, refresh the layer, and hide the weather/forecast panels.
+  Hover a cell for all five values; click a value for its location forecast.
 - **Look ahead:** an interactive 24-hour temperature / rain chart, an accessible
   hourly data table and seven-day forecasts.
 - **Compare places:** add up to three locations, inspect their snapshots, refresh
@@ -27,7 +33,8 @@ weather and air quality, developed from the Urban Heat Mapping project by
   requested and model-grid coordinates, units and attribution. Copy a link to
   the selected location, zoom level, metric and basemap.
 - **Read the research:** methodology, limitations, sources, the original report
-  and the separate GlobalBuildingAtlas viewer are available from the About panel.
+  are available from the About panel. The Atlas basemap and external 3D atlas
+  option have been removed.
 
 No login, API key, database or build step is required for the deployed website.
 Internet access is required for weather, place search, map tiles and web fonts.
@@ -36,7 +43,10 @@ Internet access is required for weather, place search, map tiles and web fonts.
 
 This website is **not** a street-level sensor network, a satellite thermal map,
 or a validated urban heat-island analysis. Air temperature is modelled at 2 m,
-wind at 10 m; rain probability refers to the current forecast hour. Satellite
+wind at 10 m. The Rain layer is the total precipitation over the preceding
+hour, including rain, showers and snow water equivalent; charts retain rain
+probability as a separate percentage. Wind arrows point toward the direction
+the air moves (weather-service direction describes where it comes from). Satellite
 imagery is a contextual basemap, not live imagery or land-surface temperature.
 Nearby requested points can resolve to the same weather model cell. Zooming the
 map does not increase meteorological resolution.
@@ -60,8 +70,14 @@ processing backend should not be read as features of the current static website.
 - Only the colour-theme preference is stored in local storage. Comparisons and
   weather caches are in memory, not a server or persistent location history.
 - Point requests are cached for ten minutes, with an explicit refresh button.
-  Sample requests batch nine locations and are only made on request, never on
-  every map movement. There is no automatic background polling.
+  Layer requests batch 16 locations, load initially, and update after map
+  movements settle (850 ms debounce, at least 8 seconds between automatic
+  batches). Each area is cached for ten minutes. Indicator switches reuse all
+  five loaded values; Refresh layer bypasses the cache. Auto-update can be
+  paused. No background time-based polling or tile prefetching is used.
+- The layer uses the viewport at request time; panning cancels that request.
+  A retained layer from another area is dimmed and labelled until updated.
+  Cached data is paired with the current display geometry when wrapping the world.
 - Superseded requests are aborted and guarded against stale responses.
   Network timeouts, offline state, provider errors and partial air-quality
   outages are handled explicitly. Missing values remain missing, not zero.
@@ -104,7 +120,9 @@ or shows fixture data. Tests make no external requests.
 Coverage includes null handling, timezones and DST, AQI boundaries, coordinate
 validation, dateline sampling, CSV injection protection, cancellation, caching,
 provider failures, search, themes, basemaps, comparison, forecast navigation,
-GPS permission failures, sharing and CSV download. These are **not visual browser
+GPS permission failures, sharing, CSV download, display-cell boundaries,
+layer visibility and opacity, all five metrics, wind direction, precipitation
+units, automatic updates and stale viewport cancellation. These are **not visual browser
 tests**. Before significant future releases, also inspect desktop and mobile
 layouts in real browsers, test keyboard navigation, native GPS permission and
 touch gestures on a device, and check external-provider availability.

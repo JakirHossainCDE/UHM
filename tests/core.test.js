@@ -27,7 +27,7 @@ test('shared views validate all URL-controlled state', () => {
   assert.deepEqual(c.parseView('?lat=&lon=').place, c.PRESETS[0]);
   assert.deepEqual(c.parseView('?lat=999&lon=0').place, c.PRESETS[0]);
   const shared = c.parseView('?lat=41&lon=12&zoom=99&metric=__proto__&base=invalid&place=Rome');
-  assert.equal(shared.zoom, 18); assert.equal(shared.metric, 'temperature'); assert.equal(shared.basemap, 'atlas');
+  assert.equal(shared.zoom, 18); assert.equal(shared.metric, 'temperature'); assert.equal(shared.basemap, 'light');
   const safe = c.parseView('?lat=1&lon=2&place=' + 'x'.repeat(1000)); assert.equal(safe.place.name.length, 80);
 });
 test('share URL preserves the GitHub Pages subpath, encodes names and strips unrelated parameters', () => {
@@ -116,4 +116,41 @@ test('latest-request guard aborts stale work and handles explicit cancellation',
   const gate = new c.LatestRequest(), first = gate.begin(), second = gate.begin();
   assert(first.signal.aborted); assert(!gate.isCurrent(first)); assert(gate.isCurrent(second));
   gate.cancel(); assert(second.signal.aborted); assert(!gate.isCurrent(second));
+});
+
+test('display cells cover the selected area without gaps and retain dateline coordinates', () => {
+  const cells = c.sampleCells({ south: 20, north: 28, west: 88, east: 96 });
+  assert.equal(cells.length, 16);
+  assert.deepEqual(cells[0].bounds, [[20,88],[22,90]]);
+  assert.deepEqual(cells[15].bounds, [[26,94],[28,96]]);
+  for (const cell of cells) {
+    assert(cell.lat > cell.bounds[0][0] && cell.lat < cell.bounds[1][0]);
+    assert(cell.displayLon > cell.bounds[0][1] && cell.displayLon < cell.bounds[1][1]);
+  }
+  const wrapped = c.sampleCells({ south: -10, north: 10, west: 170, east: -170 });
+  assert.equal(wrapped[3].bounds[1][1], 190);
+  assert.equal(wrapped[3].lon, -172.5);
+  assert.equal(wrapped[3].displayLon, 187.5);
+  assert.equal(wrapped[3].bounds[0][1], wrapped[2].bounds[1][1]);
+});
+test('precipitation amounts and rain probability remain distinct', () => {
+  const raw = weatherFixture();
+  raw.hourly.precipitation = raw.hourly.time.map(() => 2.7);
+  raw.hourly.precipitation_probability = raw.hourly.time.map(() => 80);
+  const result = c.normalizeWeather(raw);
+  assert.equal(result.current.rainfall, 2.7); assert.equal(result.current.rain, 80);
+  assert.equal(c.METRICS.rain.unit, 'mm');
+  raw.hourly.precipitation = raw.hourly.time.map(() => null);
+  assert.equal(c.normalizeWeather(raw).current.rainfall, null);
+});
+test('shared light and dark maps are restored, including legacy atlas links', () => {
+  for (const base of ['light','dark']) assert.equal(c.parseView(`?base=${base}`).basemap, base);
+  assert.equal(c.parseView('?base=atlas').basemap, 'light');
+});
+test('air-quality layer colours follow U.S. AQI category boundaries', () => {
+  for (const [low,high,index] of [[0,50,0],[51,100,1],[101,150,2],[151,200,3],[201,300,4],[301,500,5]]) {
+    assert.equal(c.metricColor(low,'aqi'), c.METRICS.aqi.colors[index]);
+    assert.equal(c.metricColor(high,'aqi'), c.METRICS.aqi.colors[index]);
+  }
+  assert.equal(c.metricColor(-1,'aqi'), c.metricColor(null,'aqi'));
 });

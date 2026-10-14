@@ -1,9 +1,9 @@
 import {
   PRESETS, METRICS, isNumber, numeric, clamp, normalizeLongitude, formatNumber, locationKey,
   coordinateLabel, parseCoordinates, parseView, shareURL, localTime, dayLabel, condition,
-  aqiCategory, windDirection, metricColor, sampleGrid, nextHours, chartGeometry, forecastCSV, LatestRequest,
-} from './modules/core.js';
-import { createClient } from './modules/api.js';
+  aqiCategory, windDirection, metricColor, sampleCells, nextHours, chartGeometry, forecastCSV, LatestRequest,
+} from './modules/core.js?v=2.1.0';
+import { createClient } from './modules/api.js?v=2.1.0';
 
 const $ = id => document.getElementById(id);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -31,9 +31,9 @@ const pointRequest = new LatestRequest(), searchRequest = new LatestRequest(), s
 const state = {
   place: initial.place, data: null, metric: initial.metric, basemap: initial.basemap,
   range: 'hourly', map: null, tileLayer: null, selectedMarker: null, samplesLayer: null,
-  samples: null, sampleViewport: '', comparisons: new Map(), searchResults: [], activeResult: -1,
+  samples: null, sampleViewport: '', layerVisible: true, opacity: .42, showValues: true, autoUpdate: true, comparisons: new Map(), searchResults: [], activeResult: -1,
 };
-let toastTimer, searchTimer, selectionRevision = 0;
+let toastTimer, searchTimer, sampleTimer, lastSampleStart = 0, selectionRevision = 0;
 let explicitTheme = false;
 try { explicitTheme = ['light', 'dark'].includes(localStorage.getItem('uhm-theme')); } catch { /* Optional preference. */ }
 
@@ -49,23 +49,27 @@ function syncTheme() {
   $('themeToggle').setAttribute('aria-label', `Switch to ${dark ? 'light' : 'dark'} mode`);
   $('themeToggle').title = `Switch to ${dark ? 'light' : 'dark'} mode`;
   $('themeIcon').setAttribute('href', dark ? '#i-sun' : '#i-moon');
-  document.querySelector('meta[name="theme-color"]').content = dark ? '#101e1a' : '#f4f5f0';
-  if (state.map && state.basemap === 'atlas') setBasemap('atlas');
+  document.querySelector('meta[name="theme-color"]').content = dark ? '#111d27' : '#dbe8e8';
+  if (state.map && ['light', 'dark'].includes(state.basemap)) setBasemap(dark ? 'dark' : 'light');
 }
 
 function setBasemap(name) {
   if (!state.map) return;
-  const dark = document.documentElement.dataset.theme === 'dark';
   const osm = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
   const maps = {
-    atlas: { url: `https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`, attribution: `${osm} &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>`, maxNativeZoom: 19 },
+    light: { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: osm, maxNativeZoom: 19 },
+    dark: { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: osm, maxNativeZoom: 19 },
     streets: { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: osm, maxNativeZoom: 19 },
     satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: '<a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noopener">Esri</a>, Vantor, Earthstar Geographics, GIS User Community', maxNativeZoom: 18 },
     terrain: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attribution: `${osm}, SRTM | <a href="https://opentopomap.org/about" target="_blank" rel="noopener">OpenTopoMap</a> (CC BY-SA)`, maxNativeZoom: 17 },
   };
-  const spec = maps[name] || maps.atlas;
+  const spec = maps[name] || maps.light;
+  const previous = state.basemap;
+  state.basemap = maps[name] ? name : 'light';
+  $('map').dataset.basemap = state.basemap;
+  $('basemapSelect').value = state.basemap;
+  if (state.tileLayer && ['light', 'dark', 'streets'].includes(previous) && ['light', 'dark', 'streets'].includes(state.basemap)) return;
   if (state.tileLayer) state.map.removeLayer(state.tileLayer);
-  state.basemap = maps[name] ? name : 'atlas';
   $('basemapSelect').value = state.basemap;
   $('tileNotice').hidden = true;
   let failed = 0;
@@ -89,18 +93,21 @@ function viewportKey() {
 function setupMap() {
   try {
     if (!window.L) throw new Error('Leaflet unavailable');
-    state.map = window.L.map('map', { zoomControl: false, minZoom: 2, maxZoom: 18, worldCopyJump: true, scrollWheelZoom: false })
+    state.map = window.L.map('map', { zoomControl: false, minZoom: 2, maxZoom: 18, worldCopyJump: true, scrollWheelZoom: true })
       .setView([state.place.lat, state.place.lon], initial.zoom);
     window.L.control.zoom({ position: 'bottomright' }).addTo(state.map);
     window.L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 100 }).addTo(state.map);
     state.samplesLayer = window.L.layerGroup().addTo(state.map);
-    setBasemap(initial.basemap);
+    const requestedBase = new URLSearchParams(window.location.search).get('base');
+    setBasemap(!requestedBase && document.documentElement.dataset.theme === 'dark' ? 'dark' : initial.basemap);
     state.map.on('click', event => selectPlace({ lat: event.latlng.lat, lon: normalizeLongitude(event.latlng.lng), name: 'Selected point', country: 'Map coordinates' }, { pan: false }));
     state.map.on('moveend', () => {
-      if (state.samples && state.sampleViewport !== viewportKey()) {
-        $('sampleSummary').textContent = 'Samples from the previous view';
-        $('sampleDetail').textContent = 'The points stay at their original coordinates. Sample again to update.';
-      }
+      // An old response must never become the layer for a newly viewed area.
+      sampleRequest.cancel();
+      $('sampleButton').disabled = false;
+      $('sampleButtonLabel').textContent = 'Refresh layer';
+      if (state.samples) renderSamples();
+      scheduleLayerUpdate();
     });
     if ('ResizeObserver' in window) new ResizeObserver(() => state.map.invalidateSize({ pan: false })).observe($('map'));
   } catch {
@@ -110,19 +117,25 @@ function setupMap() {
   }
 }
 
-function markerContent(value, selected = false) {
-  const node = element('div', `marker-value${selected ? ' selected' : ''}${!isNumber(value) ? ' missing' : ''}`, formatNumber(value));
+function markerContent(value, selected = false, direction = null) {
+  const node = element('div', `marker-value${selected ? ' selected' : ''}${!isNumber(value) ? ' missing' : ''}`, formatNumber(value, state.metric === 'rain' ? 1 : 0));
+  if (state.metric === 'wind' && isNumber(direction) && isNumber(value) && value > 0) {
+    const arrow = svgElement('svg', { viewBox: '0 0 14 18', class: 'wind-arrow', 'aria-hidden': 'true' });
+    arrow.style.setProperty('--wind-rotation', `${direction + 180}deg`);
+    arrow.append(svgElement('path', { d: 'M7 1 L13 9 L8.5 8 L8.5 17 L5.5 17 L5.5 8 L1 9 Z', fill: 'currentColor' }));
+    node.prepend(arrow);
+  }
   node.style.setProperty('--marker-color', metricColor(value, state.metric));
-  if (isNumber(value)) node.append(element('small', '', state.metric === 'temperature' ? '°' : ['humidity', 'rain'].includes(state.metric) ? '%' : ''));
+  if (isNumber(value)) node.append(element('small', '', state.metric === 'temperature' ? '°' : state.metric === 'humidity' ? '%' : state.metric === 'rain' ? 'mm' : ''));
   return node;
 }
 
-function selectedValue() { return numeric(state.data?.current?.[state.metric]); }
+function selectedValue() { return numeric(state.data?.current?.[state.metric === 'rain' ? 'rainfall' : state.metric]); }
 
 function updateSelectedMarker() {
   if (!state.map) return;
   const value = selectedValue();
-  const markerIcon = window.L.divIcon({ html: markerContent(value, true), className: 'climate-marker', iconSize: [68, 46], iconAnchor: [34, 23], tooltipAnchor: [0, -30] });
+  const markerIcon = window.L.divIcon({ html: markerContent(value, true, state.data?.current?.direction), className: 'climate-marker', iconSize: [68, 46], iconAnchor: [34, 23], tooltipAnchor: [0, -30] });
   if (!state.selectedMarker) state.selectedMarker = window.L.marker([state.place.lat, state.place.lon], { icon: markerIcon, keyboard: true, zIndexOffset: 1000 }).addTo(state.map);
   else state.selectedMarker.setLatLng([state.place.lat, state.place.lon]).setIcon(markerIcon);
   const label = `${state.place.name} · ${METRICS[state.metric].label}: ${unitText(value, ` ${METRICS[state.metric].unit}`)}`;
@@ -131,26 +144,65 @@ function updateSelectedMarker() {
   if (node) { node.setAttribute('aria-label', label); node.title = label; }
 }
 
+function sampleTooltip(point) {
+  const content = element('div', 'sample-tooltip');
+  content.append(element('strong', '', 'Model estimate · sampled location'));
+  const list = element('dl');
+  for (const [key, spec] of Object.entries(METRICS)) {
+    list.append(element('dt', '', spec.short), element('dd', '', unitText(point.values[key], ` ${spec.unit}`, key === 'rain' ? 1 : 0)));
+  }
+  content.append(list);
+  if (isNumber(point.direction)) content.append(element('small', '', `Wind from ${windDirection(point.direction)} · arrows show movement`));
+  content.append(element('small', '', coordinateLabel(point.lat, point.lon)));
+  const stamp = state.metric === 'aqi' ? point.airTime : state.metric === 'rain' ? point.rainTime : point.time;
+  content.append(element('small', '', `Model ${localTime(stamp, 'UTC', { day: 'numeric', month: 'short' })} UTC`));
+  if (state.metric === 'aqi') content.append(element('small', '', aqiCategory(point.values.aqi).label));
+  if (state.metric === 'rain') content.append(element('small', '', 'Total precipitation over preceding hour, including snow water equivalent.'));
+  content.append(element('small', '', 'Display cell ≠ native model grid. Click a value for its forecast.'));
+  return content;
+}
+
 function renderSamples() {
   if (!state.samplesLayer) return;
   state.samplesLayer.clearLayers();
+  if (!state.layerVisible) {
+    $('sampleSummary').textContent = 'Indicator layer hidden';
+    $('sampleDetail').textContent = 'Turn on Show layer to display the model estimates.';
+    return;
+  }
   if (!state.samples) return;
   let available = 0;
+  const previousView = state.sampleViewport !== viewportKey();
   for (const point of state.samples.points) {
-    const value = point.values[state.metric];
-    if (isNumber(value)) available++;
-    const stamp = state.metric === 'aqi' ? point.airTime : point.time;
-    const label = `${METRICS[state.metric].label}: ${unitText(value, ` ${METRICS[state.metric].unit}`)} · ${coordinateLabel(point.lat, point.lon)} · Model ${localTime(stamp, 'UTC')} UTC`;
-    const marker = window.L.marker([point.lat, point.lon], {
-      icon: window.L.divIcon({ html: markerContent(value), className: 'climate-marker', iconSize: [51, 38], iconAnchor: [25.5, 19] }),
-      keyboard: true, title: label, alt: label,
-    }).bindTooltip(element('span', '', label), { direction: 'top' }).addTo(state.samplesLayer);
+    const value = point.values[state.metric], valid = isNumber(value);
+    if (valid) available++;
+    const color = metricColor(value, state.metric);
+    if (point.bounds) {
+      window.L.rectangle(point.bounds, {
+        className: 'layer-cell', color: valid ? color : '#7d8c96', weight: .6,
+        opacity: .3, fillColor: color, fillOpacity: valid ? state.opacity * (previousView ? .45 : 1) : 0,
+        dashArray: valid ? null : '4 4', bubblingMouseEvents: true,
+      }).bindTooltip(sampleTooltip(point), { sticky: true, className: 'sample-tooltip' }).addTo(state.samplesLayer);
+    }
+    if (!state.showValues) continue;
+    const label = `${METRICS[state.metric].label}: ${unitText(value, ` ${METRICS[state.metric].unit}`, state.metric === 'rain' ? 1 : 0)} · ${coordinateLabel(point.lat, point.lon)}`;
+    const marker = window.L.marker([point.lat, point.displayLon ?? point.lon], {
+      icon: window.L.divIcon({ html: markerContent(value, false, point.direction), className: 'climate-marker sample-marker', iconSize: [64, 38], iconAnchor: [32, 19] }),
+      keyboard: true, title: label, alt: label, opacity: previousView ? .55 : 1,
+    }).bindTooltip(sampleTooltip(point), { direction: 'top' }).addTo(state.samplesLayer);
     marker.on('click', () => selectPlace(point, { pan: false }));
   }
   $('clearSamples').hidden = false;
-  $('sampleSummary').textContent = `${available} of ${state.samples.points.length} estimates available`;
-  $('sampleDetail').textContent = `Retrieved ${localTime(state.samples.retrievedAt / 1000, 'UTC')} UTC. Nearby points may share a model cell.`;
-  if (state.sampleViewport !== viewportKey()) $('sampleSummary').textContent += ' · previous view';
+  $('sampleSummary').textContent = previousView ? 'Previous area · refresh to update' : `${available} of ${state.samples.points.length} estimates available`;
+  $('sampleDetail').textContent = previousView
+    ? (state.autoUpdate ? 'Updating for this view…' : 'Auto-update is paused. Choose Refresh layer.')
+    : `Retrieved ${localTime(state.samples.retrievedAt / 1000, 'UTC')} UTC · ${available ? 'cells show sampled values.' : 'no data for this indicator.'}`;
+}
+
+function scheduleLayerUpdate() {
+  clearTimeout(sampleTimer);
+  if (!state.map || !state.autoUpdate || !state.layerVisible) return;
+  sampleTimer = setTimeout(() => sampleView(), Math.max(850, 8000 - (Date.now() - lastSampleStart)));
 }
 
 function setMetric(metric) {
@@ -160,37 +212,40 @@ function setMetric(metric) {
   all('[data-metric]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.metric === metric)));
   $('legendTitle').textContent = spec.label;
   $('legendUnit').textContent = spec.unit;
-  $('legendGradient').style.background = `linear-gradient(to right, ${spec.colors.join(',')})`;
+  $('legendGradient').style.background = spec.gradient || `linear-gradient(to right, ${spec.colors.join(',')})`;
   $('legendTicks').replaceChildren(...spec.ticks.map(tick => element('span', '', tick)));
+  $('legendNote').textContent = metric === 'rain' ? 'Preceding hour · rain, showers + snow' : metric === 'wind' ? 'Arrows show air movement · at 10 m' : metric === 'aqi' ? 'CAMS model · 16 sampled locations' : '16 model samples · display cells';
   updateSelectedMarker();
   renderSamples();
 }
 
-async function sampleView() {
-  if (!state.map) return;
+async function sampleView({ force = false } = {}) {
+  if (!state.map || !state.layerVisible) return;
+  clearTimeout(sampleTimer);
+  lastSampleStart = Date.now();
   const ticket = sampleRequest.begin(), bounds = state.map.getBounds();
   const sampledViewport = viewportKey();
   $('sampleButton').disabled = true;
-  $('sampleButtonLabel').textContent = 'Loading samples…';
-  $('sampleSummary').textContent = 'Requesting model estimates';
-  $('sampleDetail').textContent = 'Fetching nine points, not a continuous heat surface.';
+  $('sampleButtonLabel').textContent = 'Loading…';
+  $('sampleSummary').textContent = 'Loading the indicator layer';
+  $('sampleDetail').textContent = 'Fetching 16 model estimates for the visible area.';
   try {
-    const points = sampleGrid({ south: bounds.getSouth(), north: bounds.getNorth(), west: bounds.getWest(), east: bounds.getEast() });
-    const result = await client.samples(points, { signal: ticket.signal });
-    if (!sampleRequest.isCurrent(ticket)) return;
+    const points = sampleCells({ south: bounds.getSouth(), north: bounds.getNorth(), west: bounds.getWest(), east: bounds.getEast() });
+    const result = await client.samples(points, { signal: ticket.signal, force });
+    if (!sampleRequest.isCurrent(ticket) || sampledViewport !== viewportKey()) return;
     state.samples = result;
     state.sampleViewport = sampledViewport;
     renderSamples();
-    if (result.partial) toast('Some sample data is unavailable. Missing values are shown as a dash.');
-    $('announcer').textContent = 'Nine model sample locations loaded on the map.';
+    if (result.partial) toast('Some indicator data is unavailable. Missing values are left unfilled.');
+    $('announcer').textContent = 'Sixteen model estimates loaded. Switch indicators, adjust opacity, or inspect a value.';
   } catch (error) {
     if (!sampleRequest.isCurrent(ticket)) return;
-    $('sampleSummary').textContent = state.samples ? 'Previous samples retained' : 'Samples could not load';
+    $('sampleSummary').textContent = state.samples ? 'Previous layer retained' : 'Layer could not load';
     $('sampleDetail').textContent = error.message;
   } finally {
     if (sampleRequest.isCurrent(ticket)) {
       $('sampleButton').disabled = false;
-      $('sampleButtonLabel').textContent = state.samples ? 'Sample again' : 'Sample this view';
+      $('sampleButtonLabel').textContent = 'Refresh layer';
     }
   }
 }
@@ -223,6 +278,7 @@ function clearConditions() {
   $('weatherDescription').textContent = 'Fetching modelled conditions…';
   $('weatherSymbol').setAttribute('href', '#i-partly');
   $('windDetail').textContent = 'At 10 m above ground';
+  $('rainDetail').textContent = 'Hourly total · mm';
   $('aqiCategory').textContent = 'Modelled air quality';
   $('aqiCategory').style.borderColor = 'transparent';
   $('weatherError').hidden = true;
@@ -252,7 +308,8 @@ function renderConditions() {
   $('weatherSymbol').setAttribute('href', `#i-${description.icon}`);
   metricReading('humidity', c.humidity, '%');
   metricReading('wind', c.wind, 'km/h');
-  metricReading('rain', c.rain, '%');
+  metricReading('rain', c.rainfall, 'mm');
+  $('rainDetail').textContent = `Hourly total · ${unitText(c.rain, '%')} probability`;
   metricReading('aqi', c.aqi, '');
   $('windDetail').textContent = `${windDirection(c.direction)} · at 10 m`;
   const category = aqiCategory(c.aqi);
@@ -438,7 +495,7 @@ function renderComparisons() {
     const name = element('button', 'compare-place-name'); name.type = 'button';
     name.title = `Explore ${place.name} on the map`;
     name.append(element('strong', '', place.name), element('span', '', place.country || coordinateLabel(place.lat, place.lon)));
-    name.addEventListener('click', () => selectPlace(place));
+    name.addEventListener('click', () => { $('comparisonDialog').close(); selectPlace(place); });
     const actions = element('div', 'compare-place-actions');
     const refresh = element('button', 'icon-button'); refresh.type = 'button';
     refresh.setAttribute('aria-label', `Refresh ${place.name} comparison`); refresh.title = `Refresh ${place.name}`;
@@ -581,17 +638,49 @@ function setupInteractions() {
     const centre = state.map.getCenter();
     selectPlace({ lat: centre.lat, lon: normalizeLongitude(centre.lng), name: 'Map centre', country: 'Selected coordinates' }, { pan: false });
   });
-  $('sampleButton').addEventListener('click', sampleView);
+  $('sampleButton').addEventListener('click', () => {
+    state.layerVisible = true; $('layerVisible').checked = true;
+    sampleView({ force: true });
+  });
+  $('layerOpacity').addEventListener('input', event => {
+    state.opacity = clamp(Number(event.target.value) / 100, .1, .85);
+    $('opacityValue').textContent = `${Math.round(state.opacity * 100)}%`;
+    renderSamples();
+  });
+  $('showValues').addEventListener('change', event => { state.showValues = event.target.checked; renderSamples(); });
+  $('layerVisible').addEventListener('change', event => {
+    state.layerVisible = event.target.checked;
+    if (!state.layerVisible) {
+      clearTimeout(sampleTimer); sampleRequest.cancel();
+      $('sampleButton').disabled = false; $('sampleButtonLabel').textContent = 'Refresh layer';
+    }
+    renderSamples();
+    if (state.layerVisible && (!state.samples || state.sampleViewport !== viewportKey())) sampleView();
+  });
+  $('autoUpdate').addEventListener('change', event => {
+    state.autoUpdate = event.target.checked; clearTimeout(sampleTimer);
+    if (state.autoUpdate && (!state.samples || state.sampleViewport !== viewportKey())) scheduleLayerUpdate();
+    if (state.samples) renderSamples();
+  });
   $('clearSamples').addEventListener('click', () => {
-    sampleRequest.cancel(); state.samples = null; state.samplesLayer?.clearLayers();
+    clearTimeout(sampleTimer); sampleRequest.cancel(); state.samples = null; state.samplesLayer?.clearLayers();
+    state.autoUpdate = false; $('autoUpdate').checked = false;
     $('clearSamples').hidden = true; $('sampleButton').disabled = !state.map;
-    $('sampleButtonLabel').textContent = 'Sample this view'; $('sampleSummary').textContent = 'See the wider picture';
-    $('sampleDetail').textContent = 'Sample 9 points in this view. No interpolation.';
+    $('sampleButtonLabel').textContent = 'Refresh layer'; $('sampleSummary').textContent = 'Layer cleared';
+    $('sampleDetail').textContent = 'Choose Refresh layer or enable Auto-update to load this area.';
     $('sampleButton').focus();
   });
+  $('panelsToggle').addEventListener('click', () => {
+    const hidden = $('explorer').classList.toggle('panels-hidden');
+    $('panelsToggle').setAttribute('aria-pressed', String(hidden));
+    $('panelsToggle').setAttribute('aria-label', `${hidden ? 'Show' : 'Hide'} weather and forecast panels`);
+    state.map?.invalidateSize({ pan: false });
+  });
+  $('openComparison').addEventListener('click', () => openDialog($('comparisonDialog')));
+  $('closeComparison').addEventListener('click', () => $('comparisonDialog').close());
   $('refreshButton').addEventListener('click', () => selectPlace(state.place, { pan: false, force: true }));
-  $('compareButton').addEventListener('click', () => { if (state.data) addComparison(state.place, state.data); });
-  $('compareStarter').addEventListener('click', () => { if (state.data) addComparison(state.place, state.data); });
+  $('compareButton').addEventListener('click', () => { if (state.data) { addComparison(state.place, state.data); openDialog($('comparisonDialog')); } });
+  $('compareStarter').addEventListener('click', () => { if (state.data) { addComparison(state.place, state.data); openDialog($('comparisonDialog')); } });
   all('[data-compare-preset]').forEach(button => button.addEventListener('click', () => addComparison(PRESETS[Number(button.dataset.comparePreset)])));
   all('[data-forecast]').forEach(button => {
     button.addEventListener('click', () => setForecastRange(button.dataset.forecast));
@@ -666,7 +755,7 @@ function setupInteractions() {
   });
   all('[data-open-about]').forEach(button => button.addEventListener('click', () => openDialog($('aboutDialog'))));
   $('closeAbout').addEventListener('click', () => $('aboutDialog').close());
-  for (const dialog of [$('aboutDialog'), $('shareDialog')]) {
+  for (const dialog of [$('aboutDialog'), $('shareDialog'), $('comparisonDialog')]) {
     dialog.addEventListener('close', () => { document.body.style.overflow = ''; });
     dialog.addEventListener('click', event => {
       if (event.target !== dialog) return;
@@ -686,3 +775,4 @@ setupMap();
 setupInteractions();
 setMetric(initial.metric);
 selectPlace(initial.place, { pan: false });
+if (state.map) sampleView();
