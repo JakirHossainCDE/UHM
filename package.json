@@ -1,0 +1,14 @@
+{
+  "name": "uhm-urban-climate-atlas",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A buildless, accessible urban weather and air-quality explorer.",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "check": "node --check script.js && node --check modules/core.js && node --check modules/api.js && node scripts/check-site.js",
+    "start": "python3 app.py"
+  },
+  "engines": { "node": "^24.15.0 || >=26.0.0" },
+  "devDependencies": { "css-tree": "3.2.1", "jsdom": "30.1.2" }
+}

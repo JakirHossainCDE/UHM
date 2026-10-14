@@ -1,208 +1,688 @@
-const GLOBAL_CENTER = { lat: 20, lon: 0, name: 'Global overview' };
-const weatherCodes = { 0:['Clear sky','fa-sun'], 1:['Mainly clear','fa-cloud-sun'], 2:['Partly cloudy','fa-cloud-sun'], 3:['Overcast','fa-cloud'], 45:['Foggy','fa-smog'], 48:['Rime fog','fa-smog'], 51:['Drizzle','fa-cloud-rain'], 53:['Drizzle','fa-cloud-rain'], 55:['Dense drizzle','fa-cloud-showers-heavy'], 61:['Light rain','fa-cloud-rain'], 63:['Rain','fa-cloud-showers-heavy'], 65:['Heavy rain','fa-cloud-showers-heavy'], 80:['Rain showers','fa-cloud-showers-heavy'], 81:['Rain showers','fa-cloud-showers-heavy'], 82:['Heavy showers','fa-cloud-showers-heavy'], 95:['Thunderstorm','fa-cloud-bolt'], 96:['Thunderstorm','fa-cloud-bolt'], 99:['Thunderstorm','fa-cloud-bolt'] };
-let selected = { ...GLOBAL_CENTER };
-let weatherData = null;
-let map;
-let pointMarker;
-let surfaceLayer;
-let surfaceData = null;
-let surfaceMetric = 'temperature';
-let baseLayers;
-let activeBaseLayer;
-let forecastRange = 'hourly';
-const SURFACE_BOUNDS = { south: -60, north: 75, west: -180, east: 180 };
-const SURFACE_SIZE = 13;
-const MAPBOX_ACCESS_TOKEN = 'pk.eyJ1IjoidGVqYXMyIiwiYSI6ImNtOWppcHJsOTBlYzQyaXNiczV5cWMyYzUifQ.iu9NmyrnMSKEeGGtnuv8Tg';
-const surfaceDefinitions = {
-    temperature: { label: 'Temperature', unit: '°C', min: 18, max: 42, low: 'Cooler', middle: 'Warm', high: 'Hotter' },
-    wind: { label: 'Wind speed', unit: ' km/h', min: 0, max: 40, low: 'Calm', middle: 'Breezy', high: 'Windy' },
-    humidity: { label: 'Humidity', unit: '%', min: 20, max: 100, low: 'Drier', middle: 'Moderate', high: 'Humid' },
-    rain: { label: 'Rain probability', unit: '%', min: 0, max: 100, low: 'Low chance', middle: 'Possible', high: 'Likely' },
-    aqi: { label: 'Air quality', unit: ' AQI', min: 0, max: 200, low: 'Good', middle: 'Moderate', high: 'Poor' }
-};
+import {
+  PRESETS, METRICS, isNumber, numeric, clamp, normalizeLongitude, formatNumber, locationKey,
+  coordinateLabel, parseCoordinates, parseView, shareURL, localTime, dayLabel, condition,
+  aqiCategory, windDirection, metricColor, sampleGrid, nextHours, chartGeometry, forecastCSV, LatestRequest,
+} from './modules/core.js';
+import { createClient } from './modules/api.js';
 
-function setText(id, value) { const element = document.getElementById(id); if (element) element.textContent = value; }
-function description(code) { return weatherCodes[code] || ['Variable conditions', 'fa-cloud-sun']; }
-function formatHour(value) { return new Date(value).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Dhaka' }); }
-function formatDay(value) { return new Date(`${value}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); }
-function airQualityLabel(aqi) { if (aqi == null) return '--'; if (aqi <= 50) return 'Good'; if (aqi <= 100) return 'Moderate'; if (aqi <= 150) return 'Unhealthy'; return 'Poor'; }
-function apiUrl(lat, lon) {
-    const weather = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&hourly=temperature_2m,precipitation_probability,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=7&timezone=Asia%2FDhaka`;
-    const air = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,pm2_5&timezone=Asia%2FDhaka`;
-    return { weather, air };
+const $ = id => document.getElementById(id);
+const all = selector => [...document.querySelectorAll(selector)];
+const element = (tag, className = '', text) => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+const svgElement = (tag, attrs = {}, text) => {
+  const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+const icon = name => {
+  const svg = svgElement('svg', { class: 'icon', 'aria-hidden': 'true' });
+  svg.append(svgElement('use', { href: `#i-${name}` }));
+  return svg;
+};
+const unitText = (value, unit = '', digits = 0) => isNumber(value) ? `${formatNumber(value, digits)}${unit}` : '—';
+const initial = parseView(window.location.search);
+const client = createClient();
+const pointRequest = new LatestRequest(), searchRequest = new LatestRequest(), sampleRequest = new LatestRequest();
+const state = {
+  place: initial.place, data: null, metric: initial.metric, basemap: initial.basemap,
+  range: 'hourly', map: null, tileLayer: null, selectedMarker: null, samplesLayer: null,
+  samples: null, sampleViewport: '', comparisons: new Map(), searchResults: [], activeResult: -1,
+};
+let toastTimer, searchTimer, selectionRevision = 0;
+let explicitTheme = false;
+try { explicitTheme = ['light', 'dark'].includes(localStorage.getItem('uhm-theme')); } catch { /* Optional preference. */ }
+
+function toast(message) {
+  clearTimeout(toastTimer);
+  $('toast').textContent = message;
+  $('toast').hidden = false;
+  toastTimer = setTimeout(() => { $('toast').hidden = true; }, 5500);
 }
-function surfaceCoordinates() {
-    const coordinates = [];
-    for (let row = 0; row < SURFACE_SIZE; row += 1) {
-        for (let column = 0; column < SURFACE_SIZE; column += 1) {
-            coordinates.push({
-                lat: SURFACE_BOUNDS.south + (SURFACE_BOUNDS.north - SURFACE_BOUNDS.south) * row / (SURFACE_SIZE - 1),
-                lon: SURFACE_BOUNDS.west + (SURFACE_BOUNDS.east - SURFACE_BOUNDS.west) * column / (SURFACE_SIZE - 1)
-            });
-        }
+
+function syncTheme() {
+  const dark = document.documentElement.dataset.theme === 'dark';
+  $('themeToggle').setAttribute('aria-label', `Switch to ${dark ? 'light' : 'dark'} mode`);
+  $('themeToggle').title = `Switch to ${dark ? 'light' : 'dark'} mode`;
+  $('themeIcon').setAttribute('href', dark ? '#i-sun' : '#i-moon');
+  document.querySelector('meta[name="theme-color"]').content = dark ? '#101e1a' : '#f4f5f0';
+  if (state.map && state.basemap === 'atlas') setBasemap('atlas');
+}
+
+function setBasemap(name) {
+  if (!state.map) return;
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const osm = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+  const maps = {
+    atlas: { url: `https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'light_all'}/{z}/{x}/{y}{r}.png`, attribution: `${osm} &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>`, maxNativeZoom: 19 },
+    streets: { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: osm, maxNativeZoom: 19 },
+    satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: '<a href="https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9" target="_blank" rel="noopener">Esri</a>, Vantor, Earthstar Geographics, GIS User Community', maxNativeZoom: 18 },
+    terrain: { url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', attribution: `${osm}, SRTM | <a href="https://opentopomap.org/about" target="_blank" rel="noopener">OpenTopoMap</a> (CC BY-SA)`, maxNativeZoom: 17 },
+  };
+  const spec = maps[name] || maps.atlas;
+  if (state.tileLayer) state.map.removeLayer(state.tileLayer);
+  state.basemap = maps[name] ? name : 'atlas';
+  $('basemapSelect').value = state.basemap;
+  $('tileNotice').hidden = true;
+  let failed = 0;
+  const layer = window.L.tileLayer(spec.url, { attribution: spec.attribution, maxZoom: 18, maxNativeZoom: spec.maxNativeZoom, subdomains: 'abc', keepBuffer: 2 });
+  layer.on('tileerror', () => {
+    if (state.tileLayer === layer && ++failed >= 3) {
+      $('tileNotice').textContent = 'Some map tiles could not load. Try another basemap; weather data is independent.';
+      $('tileNotice').hidden = false;
     }
-    return coordinates;
+  });
+  state.tileLayer = layer;
+  layer.addTo(state.map);
 }
-function surfaceUrl() {
-    const coordinates = surfaceCoordinates();
-    const latitude = coordinates.map(point => point.lat.toFixed(4)).join(',');
-    const longitude = coordinates.map(point => point.lon.toFixed(4)).join(',');
-    return {
-        weather: `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,wind_speed_10m&hourly=precipitation_probability&forecast_days=1&timezone=Asia%2FDhaka`,
-        air: `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitude}&longitude=${longitude}&current=us_aqi&timezone=Asia%2FDhaka`
+
+function viewportKey() {
+  if (!state.map) return '';
+  const b = state.map.getBounds();
+  return [b.getSouth(), b.getNorth(), b.getWest(), b.getEast()].map(v => v.toFixed(3)).join(',');
+}
+
+function setupMap() {
+  try {
+    if (!window.L) throw new Error('Leaflet unavailable');
+    state.map = window.L.map('map', { zoomControl: false, minZoom: 2, maxZoom: 18, worldCopyJump: true, scrollWheelZoom: false })
+      .setView([state.place.lat, state.place.lon], initial.zoom);
+    window.L.control.zoom({ position: 'bottomright' }).addTo(state.map);
+    window.L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 100 }).addTo(state.map);
+    state.samplesLayer = window.L.layerGroup().addTo(state.map);
+    setBasemap(initial.basemap);
+    state.map.on('click', event => selectPlace({ lat: event.latlng.lat, lon: normalizeLongitude(event.latlng.lng), name: 'Selected point', country: 'Map coordinates' }, { pan: false }));
+    state.map.on('moveend', () => {
+      if (state.samples && state.sampleViewport !== viewportKey()) {
+        $('sampleSummary').textContent = 'Samples from the previous view';
+        $('sampleDetail').textContent = 'The points stay at their original coordinates. Sample again to update.';
+      }
+    });
+    if ('ResizeObserver' in window) new ResizeObserver(() => state.map.invalidateSize({ pan: false })).observe($('map'));
+  } catch {
+    state.map = null;
+    $('mapFallback').hidden = false;
+    for (const id of ['sampleButton', 'centreButton', 'basemapSelect']) $(id).disabled = true;
+  }
+}
+
+function markerContent(value, selected = false) {
+  const node = element('div', `marker-value${selected ? ' selected' : ''}${!isNumber(value) ? ' missing' : ''}`, formatNumber(value));
+  node.style.setProperty('--marker-color', metricColor(value, state.metric));
+  if (isNumber(value)) node.append(element('small', '', state.metric === 'temperature' ? '°' : ['humidity', 'rain'].includes(state.metric) ? '%' : ''));
+  return node;
+}
+
+function selectedValue() { return numeric(state.data?.current?.[state.metric]); }
+
+function updateSelectedMarker() {
+  if (!state.map) return;
+  const value = selectedValue();
+  const markerIcon = window.L.divIcon({ html: markerContent(value, true), className: 'climate-marker', iconSize: [68, 46], iconAnchor: [34, 23], tooltipAnchor: [0, -30] });
+  if (!state.selectedMarker) state.selectedMarker = window.L.marker([state.place.lat, state.place.lon], { icon: markerIcon, keyboard: true, zIndexOffset: 1000 }).addTo(state.map);
+  else state.selectedMarker.setLatLng([state.place.lat, state.place.lon]).setIcon(markerIcon);
+  const label = `${state.place.name} · ${METRICS[state.metric].label}: ${unitText(value, ` ${METRICS[state.metric].unit}`)}`;
+  state.selectedMarker.unbindTooltip().bindTooltip(element('span', '', label), { direction: 'top' });
+  const node = state.selectedMarker.getElement();
+  if (node) { node.setAttribute('aria-label', label); node.title = label; }
+}
+
+function renderSamples() {
+  if (!state.samplesLayer) return;
+  state.samplesLayer.clearLayers();
+  if (!state.samples) return;
+  let available = 0;
+  for (const point of state.samples.points) {
+    const value = point.values[state.metric];
+    if (isNumber(value)) available++;
+    const stamp = state.metric === 'aqi' ? point.airTime : point.time;
+    const label = `${METRICS[state.metric].label}: ${unitText(value, ` ${METRICS[state.metric].unit}`)} · ${coordinateLabel(point.lat, point.lon)} · Model ${localTime(stamp, 'UTC')} UTC`;
+    const marker = window.L.marker([point.lat, point.lon], {
+      icon: window.L.divIcon({ html: markerContent(value), className: 'climate-marker', iconSize: [51, 38], iconAnchor: [25.5, 19] }),
+      keyboard: true, title: label, alt: label,
+    }).bindTooltip(element('span', '', label), { direction: 'top' }).addTo(state.samplesLayer);
+    marker.on('click', () => selectPlace(point, { pan: false }));
+  }
+  $('clearSamples').hidden = false;
+  $('sampleSummary').textContent = `${available} of ${state.samples.points.length} estimates available`;
+  $('sampleDetail').textContent = `Retrieved ${localTime(state.samples.retrievedAt / 1000, 'UTC')} UTC. Nearby points may share a model cell.`;
+  if (state.sampleViewport !== viewportKey()) $('sampleSummary').textContent += ' · previous view';
+}
+
+function setMetric(metric) {
+  if (!Object.hasOwn(METRICS, metric)) return;
+  state.metric = metric;
+  const spec = METRICS[metric];
+  all('[data-metric]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.metric === metric)));
+  $('legendTitle').textContent = spec.label;
+  $('legendUnit').textContent = spec.unit;
+  $('legendGradient').style.background = `linear-gradient(to right, ${spec.colors.join(',')})`;
+  $('legendTicks').replaceChildren(...spec.ticks.map(tick => element('span', '', tick)));
+  updateSelectedMarker();
+  renderSamples();
+}
+
+async function sampleView() {
+  if (!state.map) return;
+  const ticket = sampleRequest.begin(), bounds = state.map.getBounds();
+  const sampledViewport = viewportKey();
+  $('sampleButton').disabled = true;
+  $('sampleButtonLabel').textContent = 'Loading samples…';
+  $('sampleSummary').textContent = 'Requesting model estimates';
+  $('sampleDetail').textContent = 'Fetching nine points, not a continuous heat surface.';
+  try {
+    const points = sampleGrid({ south: bounds.getSouth(), north: bounds.getNorth(), west: bounds.getWest(), east: bounds.getEast() });
+    const result = await client.samples(points, { signal: ticket.signal });
+    if (!sampleRequest.isCurrent(ticket)) return;
+    state.samples = result;
+    state.sampleViewport = sampledViewport;
+    renderSamples();
+    if (result.partial) toast('Some sample data is unavailable. Missing values are shown as a dash.');
+    $('announcer').textContent = 'Nine model sample locations loaded on the map.';
+  } catch (error) {
+    if (!sampleRequest.isCurrent(ticket)) return;
+    $('sampleSummary').textContent = state.samples ? 'Previous samples retained' : 'Samples could not load';
+    $('sampleDetail').textContent = error.message;
+  } finally {
+    if (sampleRequest.isCurrent(ticket)) {
+      $('sampleButton').disabled = false;
+      $('sampleButtonLabel').textContent = state.samples ? 'Sample again' : 'Sample this view';
+    }
+  }
+}
+
+function metricReading(id, value, unit) {
+  const node = $(id);
+  node.replaceChildren(document.createTextNode(formatNumber(value)));
+  if (isNumber(value) && unit) node.append(element('small', '', unit));
+}
+
+function updateComparisonButtons() {
+  const exists = state.comparisons.has(locationKey(state.place));
+  const full = state.comparisons.size >= 3;
+  $('compareButton').disabled = !state.data || exists || full;
+  $('compareButtonLabel').textContent = exists ? 'Added to comparison' : full ? 'Comparison is full' : 'Add to comparison';
+  $('compareStarter').disabled = !state.data;
+  all('[data-compare-preset]').forEach(button => {
+    button.hidden = state.comparisons.has(locationKey(PRESETS[Number(button.dataset.comparePreset)]));
+    button.disabled = full;
+  });
+}
+
+function clearConditions() {
+  $('conditions').classList.add('is-loading');
+  $('conditions').setAttribute('aria-busy', 'true');
+  $('locationName').textContent = state.place.name;
+  $('locationCountry').textContent = state.place.country || 'Selected location';
+  $('coordinates').textContent = coordinateLabel(state.place.lat, state.place.lon);
+  for (const id of ['temperature', 'feelsLike', 'todayHigh', 'todayLow', 'humidity', 'wind', 'rain', 'aqi']) $(id).textContent = '—';
+  $('weatherDescription').textContent = 'Fetching modelled conditions…';
+  $('weatherSymbol').setAttribute('href', '#i-partly');
+  $('windDetail').textContent = 'At 10 m above ground';
+  $('aqiCategory').textContent = 'Modelled air quality';
+  $('aqiCategory').style.borderColor = 'transparent';
+  $('weatherError').hidden = true;
+  $('airNote').hidden = true;
+  $('dataState').dataset.state = 'loading';
+  $('dataStateLabel').textContent = 'Loading';
+  $('modelTime').textContent = 'Model time will appear here';
+  $('retrievedTime').textContent = 'Times are local to the selected place.';
+  $('forecastPlace').textContent = state.place.name;
+  $('forecastEmpty').hidden = false;
+  $('forecastEmpty').textContent = 'Your forecast is on its way…';
+  $('hourlyPanel').hidden = true;
+  $('dailyPanel').hidden = true;
+  $('exportButton').disabled = true;
+  $('refreshButton').disabled = true;
+  updateComparisonButtons();
+}
+
+function renderConditions() {
+  const data = state.data, c = data.current;
+  const description = condition(c.code, c.isDay);
+  $('temperature').textContent = formatNumber(c.temperature);
+  $('feelsLike').textContent = unitText(c.feels, '°');
+  $('todayHigh').textContent = unitText(data.daily[0]?.max, '°');
+  $('todayLow').textContent = unitText(data.daily[0]?.min, '°');
+  $('weatherDescription').textContent = description.label;
+  $('weatherSymbol').setAttribute('href', `#i-${description.icon}`);
+  metricReading('humidity', c.humidity, '%');
+  metricReading('wind', c.wind, 'km/h');
+  metricReading('rain', c.rain, '%');
+  metricReading('aqi', c.aqi, '');
+  $('windDetail').textContent = `${windDirection(c.direction)} · at 10 m`;
+  const category = aqiCategory(c.aqi);
+  $('aqiCategory').textContent = category.label;
+  $('aqiCategory').style.borderColor = category.color;
+  $('airNote').hidden = false;
+  $('airNote').textContent = data.airAvailable
+    ? `PM₂.₅ ${unitText(c.pm25, ' µg/m³', 1)} · Air model ${localTime(c.airTime, data.timezone, { timeZoneName: 'short' })}`
+    : 'Air-quality data is currently unavailable. Weather and forecasts are still shown.';
+  const old = Date.now() - c.time * 1000 > 3 * 60 * 60 * 1000;
+  $('dataState').dataset.state = old ? 'error' : 'ready';
+  $('dataStateLabel').textContent = old ? 'Older estimate' : 'Model estimate';
+  $('modelTime').textContent = `Weather model · ${localTime(c.time, data.timezone, { day: 'numeric', month: 'short', timeZoneName: 'short' })}`;
+  $('retrievedTime').textContent = `Retrieved ${localTime(data.retrievedAt / 1000, data.timezone, { timeZoneName: 'short' })} · Open-Meteo / CAMS`;
+  $('forecastPlace').textContent = `${state.place.name} · ${data.timezone.replaceAll('_', ' ')}`;
+  $('exportButton').disabled = data.hourly.length === 0;
+  updateComparisonButtons();
+}
+
+async function selectPlace(place, { pan = true, force = false } = {}) {
+  selectionRevision++;
+  $('locateButton').disabled = false;
+  const ticket = pointRequest.begin();
+  state.place = { ...place, lat: Number(place.lat.toFixed(4)), lon: Number(normalizeLongitude(place.lon).toFixed(4)), name: String(place.name || 'Selected point').slice(0, 80) };
+  state.data = null;
+  clearConditions();
+  closeSearch();
+  if (pan && state.map) state.map.setView([state.place.lat, state.place.lon], Math.max(state.map.getZoom(), 9), { animate: !matchMedia('(prefers-reduced-motion: reduce)').matches });
+  all('[data-preset]').forEach(button => button.classList.toggle('is-current', locationKey(PRESETS[Number(button.dataset.preset)]) === locationKey(state.place)));
+  updateSelectedMarker();
+  try {
+    const data = await client.point(state.place, { signal: ticket.signal, force });
+    if (!pointRequest.isCurrent(ticket)) return;
+    state.data = data;
+    renderConditions();
+    renderForecast();
+    updateSelectedMarker();
+    $('announcer').textContent = `${state.place.name} loaded. Modelled temperature ${unitText(data.current.temperature, ' degrees Celsius')}.`;
+  } catch (error) {
+    if (!pointRequest.isCurrent(ticket)) return;
+    $('weatherError').textContent = `${error.message} Use the refresh button to try again.`;
+    $('weatherError').hidden = false;
+    $('weatherDescription').textContent = 'Conditions unavailable';
+    $('dataState').dataset.state = 'error';
+    $('dataStateLabel').textContent = 'Unavailable';
+    $('forecastEmpty').textContent = 'The forecast could not load. Refresh the selected place to retry.';
+    $('announcer').textContent = `Weather for ${state.place.name} could not load.`;
+  } finally {
+    if (pointRequest.isCurrent(ticket)) {
+      $('conditions').classList.remove('is-loading');
+      $('conditions').setAttribute('aria-busy', 'false');
+      $('refreshButton').disabled = false;
+    }
+  }
+}
+
+function setForecastRange(range) {
+  state.range = range;
+  for (const button of all('[data-forecast]')) {
+    const selected = button.dataset.forecast === range;
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  }
+  $('forecastTitle').textContent = range === 'daily' ? 'The week ahead' : 'The next 24 hours';
+  $('hourlyPanel').hidden = !state.data || range !== 'hourly';
+  $('dailyPanel').hidden = !state.data || range !== 'daily';
+}
+
+function renderForecast() {
+  const data = state.data, rows = nextHours(data);
+  $('forecastEmpty').hidden = true;
+  setForecastRange(state.range);
+  renderHourly(rows, data.timezone);
+  renderDaily(data.daily);
+}
+
+function renderHourly(rows, timezone) {
+  const geometry = chartGeometry(rows, 720, 150, 25);
+  const chart = svgElement('svg', { viewBox: '0 0 720 220', role: 'group', 'aria-label': 'Hourly air temperature in Celsius and rain probability from zero to 100 percent. Use arrow keys on a chart point, or read the data table below.' });
+  if (geometry.points.length) {
+    for (const [y, value] of [[25, geometry.max], [75, (geometry.min + geometry.max) / 2], [125, geometry.min]]) {
+      chart.append(svgElement('line', { x1: 25, y1: y, x2: 695, y2: y, class: 'chart-grid' }));
+      chart.append(svgElement('text', { x: 0, y: y + 4, class: 'chart-label' }, `${formatNumber(value)}°`));
+    }
+    for (const segment of geometry.segments) {
+      const path = segment.map((point, i) => `${i === 0 ? 'M' : 'L'}${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(' ');
+      chart.append(svgElement('path', { d: `${path} L${segment.at(-1).x},130 L${segment[0].x},130 Z`, class: 'chart-area' }));
+      chart.append(svgElement('path', { d: path, class: 'chart-line' }));
+    }
+    chart.append(svgElement('text', { x: 0, y: 163, class: 'chart-label' }, '%'));
+    const pointNodes = [];
+    const readout = row => {
+      $('chartReadout').textContent = `${localTime(row.time, timezone, { weekday: 'short', timeZoneName: 'short' })} · ${unitText(row.temperature, '°C')} · Rain ${unitText(row.rain, '%')} · Wind ${unitText(row.wind, ' km/h')}`;
     };
+    geometry.points.forEach((point, i) => {
+      if (isNumber(point.rain)) {
+        const height = clamp(point.rain, 0, 100) / 100 * 28;
+        const bar = svgElement('rect', { x: point.x - 5, y: 178 - height, width: 10, height: Math.max(height, .8), rx: 2, class: 'chart-rain' });
+        bar.append(svgElement('title', {}, `${localTime(point.time, timezone)} · ${formatNumber(point.rain)}% rain probability`));
+        bar.addEventListener('pointerenter', () => readout(point));
+        chart.append(bar);
+      }
+      if (i % 4 === 0 || i === geometry.points.length - 1) chart.append(svgElement('text', { x: point.x, y: 207, class: 'chart-label', 'text-anchor': 'middle' }, localTime(point.time, timezone)));
+      if (point.y === null) return;
+      const circle = svgElement('circle', { cx: point.x, cy: point.y, r: 3.5, class: 'chart-point', tabindex: pointNodes.length === 0 ? 0 : -1, role: 'button', 'aria-label': `${localTime(point.time, timezone, { weekday: 'short', timeZoneName: 'short' })}, ${unitText(point.temperature, ' degrees Celsius')}, rain ${unitText(point.rain, ' percent')}` });
+      for (const event of ['pointerenter', 'focus', 'click']) circle.addEventListener(event, () => readout(point));
+      circle.addEventListener('keydown', event => {
+        const current = pointNodes.indexOf(circle);
+        let target;
+        if (event.key === 'ArrowRight') target = Math.min(current + 1, pointNodes.length - 1);
+        if (event.key === 'ArrowLeft') target = Math.max(current - 1, 0);
+        if (event.key === 'Home') target = 0;
+        if (event.key === 'End') target = pointNodes.length - 1;
+        if (target !== undefined) {
+          event.preventDefault();
+          pointNodes.forEach((node, index) => node.setAttribute('tabindex', index === target ? '0' : '-1'));
+          pointNodes[target].focus();
+        } else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); readout(point); }
+      });
+      pointNodes.push(circle);
+      chart.append(circle);
+    });
+    if (rows.length) readout(rows[0]);
+  } else {
+    chart.append(svgElement('text', { x: 360, y: 90, class: 'chart-label', 'text-anchor': 'middle' }, 'Hourly temperatures are unavailable.'));
+    $('chartReadout').textContent = 'Any available values are listed in the data table.';
+  }
+  $('hourlyChart').replaceChildren(chart);
+  $('hourlyCaption').textContent = `${state.place.name} · next 24 hours · ${timezone.replaceAll('_', ' ')}`;
+  $('hourlyRows').replaceChildren(...rows.map(row => {
+    const tr = element('tr');
+    const time = element('th', '', localTime(row.time, timezone, { weekday: 'short', timeZoneName: 'short' }));
+    time.scope = 'row';
+    tr.append(time, element('td', '', unitText(row.temperature, '°C')), element('td', '', unitText(row.rain, '%')), element('td', '', unitText(row.wind, ' km/h')));
+    return tr;
+  }));
+  const warmest = rows.filter(row => isNumber(row.temperature)).sort((a, b) => b.temperature - a.temperature)[0];
+  const wettest = rows.filter(row => isNumber(row.rain)).sort((a, b) => b.rain - a.rain)[0];
+  $('forecastHighlights').replaceChildren(...[
+    ['Warmest forecast hour', warmest, 'temperature', '°C'], ['Peak rain probability', wettest, 'rain', '%'],
+  ].map(([label, row, key, unit]) => {
+    const box = element('div', 'forecast-highlight');
+    const value = element('strong', '', unitText(row?.[key], unit));
+    if (row) value.append(element('small', '', localTime(row.time, timezone, { weekday: 'short' })));
+    box.append(element('span', '', label), value);
+    return box;
+  }));
 }
-function colorForValue(value, definition) {
-    const ratio = Math.max(0, Math.min(1, (value - definition.min) / (definition.max - definition.min)));
-    const stops = [[58, 134, 255], [0, 168, 150], [245, 158, 11], [239, 79, 63]];
-    const scaled = ratio * (stops.length - 1);
-    const index = Math.min(Math.floor(scaled), stops.length - 2);
-    const amount = scaled - index;
-    const start = stops[index];
-    const end = stops[index + 1];
-    const rgb = start.map((channel, position) => Math.round(channel + (end[position] - channel) * amount));
-    return `rgb(${rgb.join(',')})`;
-}
-function renderSurfaceLayer() {
-    if (!map || !surfaceData) return;
-    if (surfaceLayer) surfaceLayer.remove();
-    const definition = surfaceDefinitions[surfaceMetric];
-    const cells = [];
-    for (let row = 0; row < SURFACE_SIZE - 1; row += 1) {
-        for (let column = 0; column < SURFACE_SIZE - 1; column += 1) {
-            const index = row * SURFACE_SIZE + column;
-            const values = [index, index + 1, index + SURFACE_SIZE, index + SURFACE_SIZE + 1]
-                .map(pointIndex => surfaceData[pointIndex]?.[surfaceMetric])
-                .filter(value => Number.isFinite(value));
-            if (!values.length) continue;
-            const value = values.reduce((sum, item) => sum + item, 0) / values.length;
-            const south = SURFACE_BOUNDS.south + (SURFACE_BOUNDS.north - SURFACE_BOUNDS.south) * row / (SURFACE_SIZE - 1);
-            const north = SURFACE_BOUNDS.south + (SURFACE_BOUNDS.north - SURFACE_BOUNDS.south) * (row + 1) / (SURFACE_SIZE - 1);
-            const west = SURFACE_BOUNDS.west + (SURFACE_BOUNDS.east - SURFACE_BOUNDS.west) * column / (SURFACE_SIZE - 1);
-            const east = SURFACE_BOUNDS.west + (SURFACE_BOUNDS.east - SURFACE_BOUNDS.west) * (column + 1) / (SURFACE_SIZE - 1);
-            cells.push(L.rectangle([[south, west], [north, east]], {
-                color: colorForValue(value, definition),
-                weight: 1,
-                opacity: .35,
-                fillColor: colorForValue(value, definition),
-                fillOpacity: .58
-            }).bindTooltip(`${definition.label}: ${value.toFixed(1)}${definition.unit}`, { sticky: true, className: 'heat-tooltip' }));
-        }
+
+function renderDaily(rows) {
+  if (!rows.length) { $('dailyRows').replaceChildren(element('p', 'forecast-empty', 'Daily forecasts are unavailable.')); return; }
+  const lows = rows.map(row => row.min).filter(isNumber), highs = rows.map(row => row.max).filter(isNumber);
+  const min = lows.length ? Math.min(...lows) : 0, max = highs.length ? Math.max(...highs) : 1;
+  $('dailyRows').replaceChildren(...rows.map(row => {
+    const item = element('div', 'daily-row'), weather = condition(row.code);
+    const name = element('div', 'daily-name'), description = element('span');
+    description.append(element('strong', '', dayLabel(row.date)), element('small', '', weather.label));
+    name.append(icon(weather.icon), description);
+    const range = element('div', 'daily-range'), track = element('div', 'range-track');
+    track.setAttribute('aria-hidden', 'true');
+    if (isNumber(row.min) && isNumber(row.max)) {
+      const fill = element('div', 'range-fill');
+      fill.style.left = `${clamp((row.min - min) / Math.max(max - min, 1), 0, 1) * 100}%`;
+      fill.style.width = `${clamp((row.max - row.min) / Math.max(max - min, 1), 0, 1) * 100}%`;
+      track.append(fill);
     }
-    surfaceLayer = L.layerGroup(cells).addTo(map);
+    range.append(element('span', '', unitText(row.min, '°')), track, element('span', '', unitText(row.max, '°')));
+    item.append(name, range, element('div', 'daily-rain', unitText(row.rain, '%')));
+    return item;
+  }));
 }
-async function loadSurfaceData() {
+
+function renderComparisons() {
+  $('comparisonEmpty').hidden = state.comparisons.size > 0;
+  $('compareCount').textContent = `${state.comparisons.size} / 3`;
+  $('comparisonSuggestions').hidden = state.comparisons.size === 0 || state.comparisons.size >= 3;
+  $('comparisonList').replaceChildren(...[...state.comparisons.entries()].map(([key, entry]) => {
+    const { place, data, loading, error } = entry;
+    const card = element('article', 'compare-place');
+    card.setAttribute('aria-label', `Comparison: ${place.name}`);
+    card.setAttribute('aria-busy', String(loading));
+    const head = element('div', 'compare-place-header');
+    const name = element('button', 'compare-place-name'); name.type = 'button';
+    name.title = `Explore ${place.name} on the map`;
+    name.append(element('strong', '', place.name), element('span', '', place.country || coordinateLabel(place.lat, place.lon)));
+    name.addEventListener('click', () => selectPlace(place));
+    const actions = element('div', 'compare-place-actions');
+    const refresh = element('button', 'icon-button'); refresh.type = 'button';
+    refresh.setAttribute('aria-label', `Refresh ${place.name} comparison`); refresh.title = `Refresh ${place.name}`;
+    refresh.disabled = loading; refresh.append(icon('refresh'));
+    refresh.addEventListener('click', () => loadComparison(key, true));
+    const remove = element('button', 'icon-button'); remove.type = 'button';
+    remove.setAttribute('aria-label', `Remove ${place.name} from comparison`); remove.title = 'Remove comparison'; remove.append(icon('close'));
+    remove.addEventListener('click', () => {
+      entry.controller?.abort();
+      state.comparisons.delete(key);
+      renderComparisons();
+      (document.querySelector('.compare-place-name') || $('compareStarter')).focus();
+      $('announcer').textContent = `${place.name} removed from comparison.`;
+    });
+    actions.append(refresh, remove); head.append(name, actions); card.append(head);
+    if (data) {
+      const values = element('div', 'compare-place-data');
+      const temp = element('div', 'compare-temp', formatNumber(data.current.temperature));
+      if (isNumber(data.current.temperature)) temp.append(element('small', '', '°C'));
+      const feels = element('div', 'compare-stat', 'Feels like'); feels.append(element('strong', '', unitText(data.current.feels, '°C')));
+      const humidity = element('div', 'compare-stat', 'Humidity'); humidity.append(element('strong', '', unitText(data.current.humidity, '%')));
+      values.append(temp, feels, humidity); card.append(values);
+      card.append(element('p', 'compare-place-time', `Model · ${localTime(data.current.time, data.timezone, { day: 'numeric', month: 'short', timeZoneName: 'short' })}`));
+    }
+    if (loading) card.append(element('p', 'compare-place-time', data ? 'Refreshing snapshot…' : 'Loading conditions…'));
+    if (error) card.append(element('p', 'compare-error', `${data ? 'Previous snapshot. ' : ''}${error} Use refresh to retry.`));
+    return card;
+  }));
+  updateComparisonButtons();
+}
+
+async function loadComparison(key, force = false) {
+  const entry = state.comparisons.get(key);
+  if (!entry) return;
+  entry.controller?.abort();
+  const controller = new AbortController(); entry.controller = controller;
+  entry.loading = true; entry.error = '';
+  renderComparisons();
+  try {
+    const data = await client.point(entry.place, { signal: controller.signal, force });
+    if (state.comparisons.get(key) !== entry || controller.signal.aborted) return;
+    entry.data = data;
+  } catch (error) {
+    if (state.comparisons.get(key) !== entry || controller.signal.aborted) return;
+    entry.error = error.message;
+  } finally {
+    if (state.comparisons.get(key) === entry && !controller.signal.aborted) { entry.loading = false; renderComparisons(); }
+  }
+}
+
+function addComparison(place = state.place, data = null) {
+  const key = locationKey(place);
+  if (state.comparisons.has(key)) { toast('This place is already in your comparison.'); return; }
+  if (state.comparisons.size >= 3) { toast('Remove a place before adding another. You can compare three at a time.'); return; }
+  state.comparisons.set(key, { place: { ...place }, data, loading: !data, error: '' });
+  renderComparisons();
+  if (!data) loadComparison(key);
+  toast(`${place.name} added to comparison.`);
+}
+
+function closeSearch() {
+  clearTimeout(searchTimer);
+  searchRequest.cancel();
+  $('searchMenu').hidden = true;
+  $('placeSearch').setAttribute('aria-expanded', 'false');
+  $('placeSearch').removeAttribute('aria-activedescendant');
+}
+
+function setActiveResult(index) {
+  state.activeResult = index;
+  const nodes = all('#searchResults [role="option"]');
+  nodes.forEach((node, i) => node.setAttribute('aria-selected', String(i === index)));
+  if (nodes[index]) $('placeSearch').setAttribute('aria-activedescendant', nodes[index].id);
+  else $('placeSearch').removeAttribute('aria-activedescendant');
+}
+
+function chooseResult(index) {
+  const place = state.searchResults[index];
+  if (!place) return;
+  $('placeSearch').value = place.name;
+  selectPlace(place);
+}
+
+async function runSearch() {
+  clearTimeout(searchTimer);
+  const query = $('placeSearch').value.trim();
+  if (query.length < 2) { closeSearch(); return; }
+  const ticket = searchRequest.begin();
+  state.searchResults = []; state.activeResult = -1;
+  $('searchResults').replaceChildren();
+  $('placeSearch').removeAttribute('aria-activedescendant');
+  $('searchMenu').hidden = false;
+  $('placeSearch').setAttribute('aria-expanded', 'true');
+  $('searchMessage').textContent = 'Searching places…';
+  try {
+    const coordinates = parseCoordinates(query);
+    const places = coordinates ? [coordinates] : await client.search(query, { signal: ticket.signal });
+    if (!searchRequest.isCurrent(ticket)) return;
+    state.searchResults = places;
+    $('searchResults').replaceChildren(...places.map((place, i) => {
+      const row = element('div', 'search-result');
+      row.id = `place-result-${i}`; row.setAttribute('role', 'option'); row.setAttribute('aria-selected', 'false');
+      const label = element('div');
+      label.append(element('strong', '', place.name), element('span', '', [place.admin, place.country].filter(Boolean).join(', ') || coordinateLabel(place.lat, place.lon)));
+      row.append(label, icon('arrow'));
+      row.addEventListener('pointerdown', event => event.preventDefault());
+      row.addEventListener('click', () => chooseResult(i));
+      $('searchMessage').textContent = '';
+      return row;
+    }));
+    if (!places.length) $('searchMessage').textContent = 'No places found. Try a city and country, or latitude, longitude.';
+    setActiveResult(places.length ? 0 : -1);
+  } catch (error) {
+    if (searchRequest.isCurrent(ticket)) $('searchMessage').textContent = `${error.message} You can still click the map or use a featured city.`;
+  }
+}
+
+function openDialog(dialog) {
+  if (typeof dialog.showModal === 'function') dialog.showModal();
+  else dialog.setAttribute('open', '');
+  document.body.style.overflow = 'hidden';
+}
+
+function setupInteractions() {
+  $('themeToggle').addEventListener('click', () => {
+    const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = theme;
+    explicitTheme = true;
+    try { localStorage.setItem('uhm-theme', theme); } catch { /* Theme still works without storage. */ }
+    syncTheme();
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+    if (!explicitTheme) { document.documentElement.dataset.theme = event.matches ? 'dark' : 'light'; syncTheme(); }
+  });
+  all('[data-preset]').forEach(button => button.addEventListener('click', () => selectPlace(PRESETS[Number(button.dataset.preset)])));
+  all('[data-metric]').forEach(button => button.addEventListener('click', () => setMetric(button.dataset.metric)));
+  $('basemapSelect').addEventListener('change', event => setBasemap(event.target.value));
+  $('centreButton').addEventListener('click', () => {
+    if (!state.map) return;
+    const centre = state.map.getCenter();
+    selectPlace({ lat: centre.lat, lon: normalizeLongitude(centre.lng), name: 'Map centre', country: 'Selected coordinates' }, { pan: false });
+  });
+  $('sampleButton').addEventListener('click', sampleView);
+  $('clearSamples').addEventListener('click', () => {
+    sampleRequest.cancel(); state.samples = null; state.samplesLayer?.clearLayers();
+    $('clearSamples').hidden = true; $('sampleButton').disabled = !state.map;
+    $('sampleButtonLabel').textContent = 'Sample this view'; $('sampleSummary').textContent = 'See the wider picture';
+    $('sampleDetail').textContent = 'Sample 9 points in this view. No interpolation.';
+    $('sampleButton').focus();
+  });
+  $('refreshButton').addEventListener('click', () => selectPlace(state.place, { pan: false, force: true }));
+  $('compareButton').addEventListener('click', () => { if (state.data) addComparison(state.place, state.data); });
+  $('compareStarter').addEventListener('click', () => { if (state.data) addComparison(state.place, state.data); });
+  all('[data-compare-preset]').forEach(button => button.addEventListener('click', () => addComparison(PRESETS[Number(button.dataset.comparePreset)])));
+  all('[data-forecast]').forEach(button => {
+    button.addEventListener('click', () => setForecastRange(button.dataset.forecast));
+    button.addEventListener('keydown', event => {
+      if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+        event.preventDefault();
+        const range = event.key === 'Home' ? 'hourly' : event.key === 'End' ? 'daily' : state.range === 'hourly' ? 'daily' : 'hourly';
+        setForecastRange(range); $(`${range}Tab`).focus();
+      }
+    });
+  });
+  $('placeSearch').addEventListener('input', () => {
+    closeSearch(); state.searchResults = []; state.activeResult = -1;
+    if ($('placeSearch').value.trim().length >= 2) searchTimer = setTimeout(runSearch, 350);
+  });
+  $('placeSearch').addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); closeSearch(); }
+    if (['ArrowDown', 'ArrowUp'].includes(event.key) && !$('searchMenu').hidden && state.searchResults.length) {
+      event.preventDefault();
+      setActiveResult((state.activeResult + (event.key === 'ArrowDown' ? 1 : -1) + state.searchResults.length) % state.searchResults.length);
+    }
+  });
+  $('searchForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const coords = parseCoordinates($('placeSearch').value);
+    if (coords) { selectPlace(coords); return; }
+    if (!$('searchMenu').hidden && state.activeResult >= 0) chooseResult(state.activeResult);
+    else runSearch();
+  });
+  document.addEventListener('pointerdown', event => { if (!$('searchForm').contains(event.target)) closeSearch(); });
+  document.addEventListener('focusin', event => { if (!$('searchForm').contains(event.target)) closeSearch(); });
+  document.addEventListener('keydown', event => {
+    if (event.key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.target.closest('input,textarea,select,[contenteditable="true"],dialog')) {
+      event.preventDefault(); $('placeSearch').focus();
+    }
+  });
+  $('locateButton').addEventListener('click', () => {
+    if (!navigator.geolocation) { toast('Your browser does not support location. Search for a city instead.'); return; }
+    const revision = ++selectionRevision;
+    $('locateButton').disabled = true;
+    toast('Allow location access to explore your current area.');
+    navigator.geolocation.getCurrentPosition(position => {
+      if (revision !== selectionRevision) return;
+      $('locateButton').disabled = false;
+      selectPlace({ lat: position.coords.latitude, lon: position.coords.longitude, name: 'My location', country: 'Browser location · not stored' });
+    }, error => {
+      if (revision !== selectionRevision) return;
+      $('locateButton').disabled = false;
+      toast(error.code === 1 ? 'Location permission was not granted. You can search for a city or choose a point on the map.' : 'Your location could not be found. Please retry or use search.');
+    }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 });
+  });
+  $('shareButton').addEventListener('click', async () => {
+    const url = shareURL(window.location.href, state.place, { zoom: state.map?.getZoom() ?? initial.zoom, metric: state.metric, basemap: state.basemap });
     try {
-        const urls = surfaceUrl();
-        const [weatherResponse, airResponse] = await Promise.all([fetch(urls.weather), fetch(urls.air)]);
-        if (!weatherResponse.ok || !airResponse.ok) throw new Error('Surface data unavailable');
-        const weather = await weatherResponse.json();
-        const air = await airResponse.json();
-        const weatherPoints = Array.isArray(weather) ? weather : [weather];
-        const airPoints = Array.isArray(air) ? air : [air];
-        surfaceData = weatherPoints.map((point, index) => {
-            const current = point.current || {};
-            const hourIndex = Math.max((point.hourly?.time || []).findIndex(time => time >= current.time), 0);
-            return {
-                temperature: Number(current.temperature_2m),
-                wind: Number(current.wind_speed_10m),
-                humidity: Number(current.relative_humidity_2m),
-                rain: Number(point.hourly?.precipitation_probability?.[hourIndex] || 0),
-                aqi: Number(airPoints[index]?.current?.us_aqi)
-            };
-        });
-        renderSurfaceLayer();
-    } catch (error) {
-        setText('dataStatus', 'Point weather connected · map layer unavailable');
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(url);
+      toast('Link copied. It includes the selected location’s coordinates.');
+    } catch {
+      $('shareLink').value = url; openDialog($('shareDialog')); $('shareLink').focus(); $('shareLink').select();
     }
+  });
+  $('exportButton').addEventListener('click', () => {
+    if (!state.data) return;
+    const csv = forecastCSV(state.place, state.data);
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = element('a'); link.href = url;
+    const name = state.place.name.normalize('NFKD').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'selected-place';
+    link.download = `uhm-${name.toLowerCase()}-hourly-forecast.csv`;
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('Forecast CSV downloaded with timestamps, coordinates and source attribution.');
+  });
+  all('[data-open-about]').forEach(button => button.addEventListener('click', () => openDialog($('aboutDialog'))));
+  $('closeAbout').addEventListener('click', () => $('aboutDialog').close());
+  for (const dialog of [$('aboutDialog'), $('shareDialog')]) {
+    dialog.addEventListener('close', () => { document.body.style.overflow = ''; });
+    dialog.addEventListener('click', event => {
+      if (event.target !== dialog) return;
+      const r = dialog.getBoundingClientRect();
+      if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) dialog.close();
+    });
+  }
+  const connectivity = () => {
+    $('connectionNotice').hidden = navigator.onLine !== false;
+    $('connectionNotice').textContent = 'You appear to be offline. Previously loaded readings may be out of date; reconnect and refresh for updated data.';
+  };
+  window.addEventListener('offline', connectivity); window.addEventListener('online', connectivity); connectivity();
 }
-function renderHourly(hourly) {
-    const forecastList = document.getElementById('forecastList');
-    forecastList.classList.remove('daily-forecast');
-    const now = hourly.time.findIndex(time => time >= weatherData.current.current.time);
-    const first = Math.max(now, 0);
-    forecastList.innerHTML = hourly.time.slice(first, first + 12).map((time, index) => {
-        const [, icon] = description(hourly.weather_code[first + index]);
-        return `<div class="forecast-item ${index === 0 ? 'current' : ''}"><span>${index === 0 ? 'Now' : formatHour(time)}</span><i class="fas ${icon}"></i><strong>${Math.round(hourly.temperature_2m[first + index])}°</strong><small>${hourly.precipitation_probability[first + index] || 0}% rain</small></div>`;
-    }).join('');
-}
-function renderDaily(daily) {
-    const forecastList = document.getElementById('forecastList');
-    forecastList.classList.add('daily-forecast');
-    forecastList.innerHTML = daily.time.map((day, index) => {
-        const [label, icon] = description(daily.weather_code[index]);
-        const dateLabel = index === 0 ? 'Today' : formatDay(day);
-        return `<div class="daily-item"><strong>${dateLabel}</strong><i class="fas ${icon}" title="${label}" aria-label="${label}"></i><b><span>${Math.round(daily.temperature_2m_max[index])}°</span> / ${Math.round(daily.temperature_2m_min[index])}°</b><small>${daily.precipitation_probability_max[index] || 0}% rain</small></div>`;
-    }).join('');
-}
-function renderForecast() { if (!weatherData) return; if (forecastRange === 'hourly') renderHourly(weatherData.current.hourly); else renderDaily(weatherData.current.daily); }
-function mapIcon() { return L.divIcon({ className: 'selected-point', html: '', iconSize: [18, 18] }); }
-function setSelectedPoint(lat, lon, label = 'Selected map point') {
-    selected = { lat, lon, name: label };
-    if (pointMarker) pointMarker.setLatLng([lat, lon]); else pointMarker = L.marker([lat, lon], { icon: mapIcon() }).addTo(map);
-    setText('selectedLocation', label);
-    loadWeather();
-}
-async function loadWeather() {
-    setText('dataStatus', 'Loading live data');
-    const urls = apiUrl(selected.lat.toFixed(4), selected.lon.toFixed(4));
-    try {
-        const [weatherResult, airResult] = await Promise.allSettled([fetch(urls.weather), fetch(urls.air)]);
-        if (weatherResult.status !== 'fulfilled' || !weatherResult.value.ok) throw new Error('Weather service unavailable');
-        const weatherResponse = weatherResult.value;
-        const airResponse = airResult.status === 'fulfilled' ? airResult.value : null;
-        const weather = await weatherResponse.json();
-        const air = airResponse && airResponse.ok ? await airResponse.json() : { current: {} };
-        weatherData = { current: weather, air };
-        const current = weatherData.current.current;
-        const [summary, icon] = description(current.weather_code);
-        document.getElementById('weatherIcon').className = `fas ${icon} weather-icon`;
-        setText('weatherSummary', summary);
-        setText('temperature', `${Math.round(current.temperature_2m)}°`);
-        setText('feelsLike', `${current.apparent_temperature.toFixed(1)}°C`);
-        setText('humidity', `${current.relative_humidity_2m}%`);
-        setText('wind', `${current.wind_speed_10m.toFixed(1)} km/h`);
-        const rainIndex = Math.max(weatherData.current.hourly.time.findIndex(time => time >= current.time), 0);
-        setText('rainfall', `${weatherData.current.hourly.precipitation_probability[rainIndex] || 0}%`);
-        setText('airQuality', airQualityLabel(weatherData.air.current.us_aqi));
-        setText('updatedAt', `Updated ${formatHour(current.time)}`);
-        setText('dataStatus', airResponse && airResponse.ok ? 'Live data connected' : 'Weather connected · AQI unavailable');
-        renderForecast();
-    } catch (error) {
-        setText('dataStatus', 'Weather data unavailable');
-        setText('updatedAt', 'Try refreshing the data');
-    }
-}
-async function initializeMap() {
-    map = L.map('map', { zoomControl: false, attributionControl: true, worldCopyJump: true, minZoom: 2 }).setView([GLOBAL_CENTER.lat, GLOBAL_CENTER.lon], 2);
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
-    baseLayers = {
-        leaflet: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }),
-        voyager: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }),
-        dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 20, attribution: '&copy; OpenStreetMap contributors &copy; CARTO' }),
-        topographic: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, attribution: '&copy; OpenStreetMap contributors, SRTM | OpenTopoMap' }),
-        satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: '&copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community' })
-    };
-    activeBaseLayer = baseLayers.leaflet.addTo(map);
-    loadSurfaceData();
-    window.setInterval(loadSurfaceData, 60 * 60 * 1000);
-    setSelectedPoint(GLOBAL_CENTER.lat, GLOBAL_CENTER.lon, GLOBAL_CENTER.name);
-    map.on('click', event => setSelectedPoint(event.latlng.lat, event.latlng.lng, `Point ${event.latlng.lat.toFixed(3)}°, ${event.latlng.lng.toFixed(3)}°`));
-}
-document.querySelectorAll('.forecast-tab').forEach(button => button.addEventListener('click', () => { forecastRange = button.dataset.range; document.querySelectorAll('.forecast-tab').forEach(item => { item.classList.toggle('active', item === button); item.setAttribute('aria-selected', item === button ? 'true' : 'false'); }); renderForecast(); }));
-document.getElementById('surfaceLayer').addEventListener('change', event => { surfaceMetric = event.target.value; renderSurfaceLayer(); });
-document.getElementById('refreshWeather').addEventListener('click', loadWeather);
-function switchBaseLayer(name) {
-    if (activeBaseLayer === baseLayers[name]) return;
-    map.removeLayer(activeBaseLayer);
-    activeBaseLayer = baseLayers[name].addTo(map);
-}
-document.getElementById('baseMapSelect').addEventListener('change', event => switchBaseLayer(event.target.value));
-document.getElementById('atlasBtn').addEventListener('click', () => { document.getElementById('atlasModal').classList.add('open'); document.getElementById('atlasModal').setAttribute('aria-hidden', 'false'); });
-document.getElementById('closeAtlas').addEventListener('click', () => { document.getElementById('atlasModal').classList.remove('open'); document.getElementById('atlasModal').setAttribute('aria-hidden', 'true'); });
-document.getElementById('atlasModal').addEventListener('click', event => { if (event.target.id === 'atlasModal') document.getElementById('closeAtlas').click(); });
-document.getElementById('geolocation-btn').addEventListener('click', () => {
-    if (!navigator.geolocation) { setText('dataStatus', 'Geolocation unavailable'); return; }
-    navigator.geolocation.getCurrentPosition(({ coords }) => { map.setView([coords.latitude, coords.longitude], 13); setSelectedPoint(coords.latitude, coords.longitude, 'Your location'); }, () => setText('dataStatus', 'Location permission denied'), { enableHighAccuracy: true, timeout: 10000 });
-});
-initializeMap();
+
+syncTheme();
+setupMap();
+setupInteractions();
+setMetric(initial.metric);
+selectPlace(initial.place, { pan: false });
