@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createClient, requestJSON, weatherURL } from '../modules/api.js';
-import { PRESETS, sampleGrid } from '../modules/core.js';
+import { PRESETS } from '../modules/core.js';
+import { surfaceSampleGrid } from '../modules/surface.js';
 import { weatherFixture, jsonResponse, fixtureFetch, NOW } from './fixtures.js';
 
 test('weather requests use auto timezone, UTC epoch times, explicit units and seven days', () => {
@@ -61,13 +62,35 @@ test('search results reject invalid coordinates and limit untrusted text', async
   const client = createClient({ fetcher: async () => jsonResponse({ results: [{ name: 'bad', latitude: 999, longitude: 0 }, { name: 'x'.repeat(500), latitude: 40, longitude: 12 }] }) });
   const result = await client.search('xx'); assert.equal(result.length, 1); assert.equal(result[0].name.length, 80);
 });
-test('sample requests batch nine locations and cache the entire view', async () => {
-  let calls = 0;
-  const client = createClient({ fetcher: (...args) => { calls++; return fixtureFetch(...args); } });
-  const points = sampleGrid({ south: 20, north: 26, west: 88, east: 94 });
+test('all 81 source locations use a single ICON / CAMS pair and cache the entire view', async () => {
+  const calls = [];
+  const client = createClient({ fetcher: (...args) => { calls.push(new URL(args[0])); return fixtureFetch(...args); } });
+  const points = surfaceSampleGrid({ south: 20, north: 26, west: 88, east: 94 });
   const first = await client.samples(points), second = await client.samples(points);
-  assert.equal(first.points.length, 9); assert.equal(first.partial, false); assert.deepEqual(first, second); assert.equal(calls, 2);
+  assert.equal(first.points.length, 81); assert.equal(first.partial, false); assert.deepEqual(first, second); assert.equal(calls.length, 2);
+  assert.equal(calls[0].pathname, '/v1/dwd-icon');
+  assert.equal(calls[0].searchParams.get('latitude').split(',').length, 81);
+  assert.equal(calls[0].searchParams.get('forecast_hours'), '1');
+  assert.equal(calls[0].searchParams.get('timezone'), 'GMT');
+  assert.equal(calls[0].searchParams.get('precipitation_unit'), 'mm');
+  assert.equal(first.source, 'DWD ICON / Open-Meteo');
   assert.equal(first.points[0].values.aqi, 72);
+});
+test('truncated or missing sample readings stay missing and flag a partial response', async () => {
+  const client = createClient({ fetcher: async url => {
+    const response = await fixtureFetch(url), payload = await response.json();
+    if (new URL(url).pathname === '/v1/dwd-icon') {
+      payload[0].hourly.temperature_2m[0] = null;
+      payload.pop();
+    }
+    return jsonResponse(payload);
+  } });
+  const result = await client.samples(surfaceSampleGrid({ south: 20, north: 26, west: 88, east: 94 }));
+  assert.equal(result.partial, true); assert.equal(result.points.length, 81);
+  assert.equal(result.points[0].values.temperature, null);
+  assert.equal(result.points[80].values.temperature, null);
+  assert.equal(result.points[80].time, null);
+  assert.equal(result.points[80].values.aqi, 72);
 });
 test('partial sample outages stay explicit, with missing fields preserved as null', async () => {
   const client = createClient({ fetcher: url => new URL(url).hostname.startsWith('api.') ? Promise.reject(new TypeError('offline')) : fixtureFetch(url) });
@@ -75,7 +98,7 @@ test('partial sample outages stay explicit, with missing fields preserved as nul
 });
 test('sample size is bounded to avoid accidental bulk requests', async () => {
   const client = createClient({ fetcher: fixtureFetch });
-  await assert.rejects(client.samples([]), /Invalid/); await assert.rejects(client.samples(Array(26).fill(PRESETS[0])), /Invalid/);
+  await assert.rejects(client.samples([]), /Invalid/); await assert.rejects(client.samples(Array(82).fill(PRESETS[0])), /Invalid/);
 });
 
 test('layer data carries rain amount, wind direction and supports forced refresh', async () => {

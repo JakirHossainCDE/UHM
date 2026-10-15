@@ -1,6 +1,7 @@
-import { numeric, normalizeWeather, locationKey, validCoordinates } from './core.js?v=2.1.0';
+import { numeric, normalizeWeather, locationKey, validCoordinates } from './core.js?v=2.2.0';
 
 const WEATHER = 'https://api.open-meteo.com/v1/forecast';
+const ICON = 'https://api.open-meteo.com/v1/dwd-icon';
 const AIR = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 const GEO = 'https://geocoding-api.open-meteo.com/v1/search';
 const TTL = 10 * 60 * 1000;
@@ -78,13 +79,13 @@ export function createClient({ fetcher = fetch, now = Date.now } = {}) {
       }));
     },
     async samples(points, { signal, force = false } = {}) {
-      if (!points.length || points.length > 25 || points.some(p => !validCoordinates(p.lat, p.lon))) throw new Error('Invalid sample locations');
+      if (!points.length || points.length > 81 || points.some(p => !validCoordinates(p.lat, p.lon))) throw new Error('Invalid sample locations');
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
       const key = points.map(locationKey).join(';'), hit = cached(sampleCache, key);
       if (!force && hit) return { ...hit, points: hit.points.map((point, i) => ({ ...point, ...points[i] })) };
       const coordinates = { latitude: points.map(p => p.lat).join(','), longitude: points.map(p => p.lon).join(','), timeformat: 'unixtime', timezone: 'GMT' };
-      const weatherURL = new URL(WEATHER), airURL = new URL(AIR);
-      weatherURL.search = new URLSearchParams({ ...coordinates, current: 'temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m', hourly: 'precipitation', forecast_hours: '1', wind_speed_unit: 'kmh', precipitation_unit: 'mm' });
+      const weatherURL = new URL(ICON), airURL = new URL(AIR);
+      weatherURL.search = new URLSearchParams({ ...coordinates, hourly: 'temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,precipitation', forecast_hours: '1', wind_speed_unit: 'kmh', precipitation_unit: 'mm' });
       airURL.search = new URLSearchParams({ ...coordinates, current: 'us_aqi' });
       const [weather, air] = await Promise.allSettled([get(weatherURL.href, signal), get(airURL.href, signal)]);
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -92,13 +93,14 @@ export function createClient({ fetcher = fetch, now = Date.now } = {}) {
       const list = result => result.status === 'fulfilled' ? (Array.isArray(result.value) ? result.value : [result.value]) : [];
       const ws = list(weather), as = list(air);
       const result = {
-        retrievedAt: now(), partial: weather.status === 'rejected' || air.status === 'rejected',
+        retrievedAt: now(), source: 'DWD ICON / Open-Meteo', partial: weather.status === 'rejected' || air.status === 'rejected' || ws.length !== points.length || as.length !== points.length,
         points: points.map((place, i) => ({ ...place,
-          time: numeric(ws[i]?.current?.time), airTime: numeric(as[i]?.current?.time), rainTime: numeric(ws[i]?.hourly?.time?.[0]), direction: numeric(ws[i]?.current?.wind_direction_10m),
+          time: numeric(ws[i]?.hourly?.time?.[0]), airTime: numeric(as[i]?.current?.time), rainTime: numeric(ws[i]?.hourly?.time?.[0]), direction: numeric(ws[i]?.hourly?.wind_direction_10m?.[0]),
           modelLat: numeric(ws[i]?.latitude), modelLon: numeric(ws[i]?.longitude),
-          values: { temperature: numeric(ws[i]?.current?.temperature_2m), humidity: numeric(ws[i]?.current?.relative_humidity_2m), wind: numeric(ws[i]?.current?.wind_speed_10m), rain: numeric(ws[i]?.hourly?.precipitation?.[0]), aqi: numeric(as[i]?.current?.us_aqi) },
+          values: { temperature: numeric(ws[i]?.hourly?.temperature_2m?.[0]), humidity: numeric(ws[i]?.hourly?.relative_humidity_2m?.[0]), wind: numeric(ws[i]?.hourly?.wind_speed_10m?.[0]), rain: numeric(ws[i]?.hourly?.precipitation?.[0]), aqi: numeric(as[i]?.current?.us_aqi) },
         })),
       };
+      result.partial ||= result.points.some(point => point.time === null || point.airTime === null || Object.values(point.values).some(value => value === null));
       put(sampleCache, key, result);
       return result;
     },

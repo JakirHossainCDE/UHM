@@ -1,9 +1,11 @@
 import {
   PRESETS, METRICS, isNumber, numeric, clamp, normalizeLongitude, formatNumber, locationKey,
   coordinateLabel, parseCoordinates, parseView, shareURL, localTime, dayLabel, condition,
-  aqiCategory, windDirection, metricColor, sampleCells, nextHours, chartGeometry, forecastCSV, LatestRequest,
-} from './modules/core.js?v=2.1.0';
-import { createClient } from './modules/api.js?v=2.1.0';
+  aqiCategory, windDirection, metricColor, nextHours, chartGeometry, forecastCSV, LatestRequest,
+} from './modules/core.js?v=2.2.0';
+import { createClient } from './modules/api.js?v=2.2.0';
+import { surfaceSampleGrid, createField, interpolateField, zoomEarthURL, AUTO_LAYER_INTERVAL } from './modules/surface.js?v=2.2.0';
+import { createSurfaceLayer } from './modules/surface-layer.js?v=2.2.0';
 
 const $ = id => document.getElementById(id);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -31,7 +33,7 @@ const pointRequest = new LatestRequest(), searchRequest = new LatestRequest(), s
 const state = {
   place: initial.place, data: null, metric: initial.metric, basemap: initial.basemap,
   range: 'hourly', map: null, tileLayer: null, selectedMarker: null, samplesLayer: null,
-  samples: null, sampleViewport: '', layerVisible: true, opacity: .42, showValues: true, autoUpdate: true, comparisons: new Map(), searchResults: [], activeResult: -1,
+  samples: null, field: null, surfaceLayer: null, renderMode: 'smooth', pixelSize: 1, sampleViewport: '', layerVisible: true, opacity: .62, showValues: false, autoUpdate: true, comparisons: new Map(), searchResults: [], activeResult: -1,
 };
 let toastTimer, searchTimer, sampleTimer, lastSampleStart = 0, selectionRevision = 0;
 let explicitTheme = false;
@@ -98,6 +100,15 @@ function setupMap() {
     window.L.control.zoom({ position: 'bottomright' }).addTo(state.map);
     window.L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 100 }).addTo(state.map);
     state.samplesLayer = window.L.layerGroup().addTo(state.map);
+    state.surfaceLayer = createSurfaceLayer(window.L).addTo(state.map);
+    state.map.on('mousemove', event => {
+      if (!state.layerVisible || !state.field) return;
+      const value = interpolateField(state.field, event.latlng.lat, event.latlng.lng, state.metric);
+      $('mapReadout').textContent = isNumber(value)
+        ? `${METRICS[state.metric].short} ${unitText(value, ` ${METRICS[state.metric].unit}`, state.metric === 'aqi' ? 0 : 1)} · interpolated estimate`
+        : 'No layer estimate at this location';
+    });
+    state.map.on('mouseout', () => { $('mapReadout').textContent = 'Move over the map to inspect · click for a point forecast'; });
     const requestedBase = new URLSearchParams(window.location.search).get('base');
     setBasemap(!requestedBase && document.documentElement.dataset.theme === 'dark' ? 'dark' : initial.basemap);
     state.map.on('click', event => selectPlace({ lat: event.latlng.lat, lon: normalizeLongitude(event.latlng.lng), name: 'Selected point', country: 'Map coordinates' }, { pan: false }));
@@ -108,6 +119,7 @@ function setupMap() {
       $('sampleButtonLabel').textContent = 'Refresh layer';
       if (state.samples) renderSamples();
       scheduleLayerUpdate();
+      updateZoomEarthLink();
     });
     if ('ResizeObserver' in window) new ResizeObserver(() => state.map.invalidateSize({ pan: false })).observe($('map'));
   } catch {
@@ -138,7 +150,7 @@ function updateSelectedMarker() {
   const markerIcon = window.L.divIcon({ html: markerContent(value, true, state.data?.current?.direction), className: 'climate-marker', iconSize: [68, 46], iconAnchor: [34, 23], tooltipAnchor: [0, -30] });
   if (!state.selectedMarker) state.selectedMarker = window.L.marker([state.place.lat, state.place.lon], { icon: markerIcon, keyboard: true, zIndexOffset: 1000 }).addTo(state.map);
   else state.selectedMarker.setLatLng([state.place.lat, state.place.lon]).setIcon(markerIcon);
-  const label = `${state.place.name} · ${METRICS[state.metric].label}: ${unitText(value, ` ${METRICS[state.metric].unit}`)}`;
+  const label = `${state.place.name} · Point forecast (best match) · ${METRICS[state.metric].label}: ${unitText(value, ` ${METRICS[state.metric].unit}`)}`;
   state.selectedMarker.unbindTooltip().bindTooltip(element('span', '', label), { direction: 'top' });
   const node = state.selectedMarker.getElement();
   if (node) { node.setAttribute('aria-label', label); node.title = label; }
@@ -158,51 +170,77 @@ function sampleTooltip(point) {
   content.append(element('small', '', `Model ${localTime(stamp, 'UTC', { day: 'numeric', month: 'short' })} UTC`));
   if (state.metric === 'aqi') content.append(element('small', '', aqiCategory(point.values.aqi).label));
   if (state.metric === 'rain') content.append(element('small', '', 'Total precipitation over preceding hour, including snow water equivalent.'));
-  content.append(element('small', '', 'Display cell ≠ native model grid. Click a value for its forecast.'));
+  content.append(element('small', '', 'Source sample, not an interpolated value. Click for a point forecast.'));
   return content;
+}
+
+function updateZoomEarthLink() {
+  $('zoomEarthLink').href = zoomEarthURL(state.place, state.map?.getZoom() ?? initial.zoom, state.metric);
+  $('zoomEarthLink').hidden = state.metric === 'aqi';
 }
 
 function renderSamples() {
   if (!state.samplesLayer) return;
+  $('mapReadout').textContent = 'Move over the map to inspect · click for a point forecast';
   state.samplesLayer.clearLayers();
-  if (!state.layerVisible) {
-    $('sampleSummary').textContent = 'Indicator layer hidden';
-    $('sampleDetail').textContent = 'Turn on Show layer to display the model estimates.';
+  if (!state.layerVisible || !state.samples) {
+    state.surfaceLayer?.setField(null);
+    if (!state.layerVisible) {
+      $('sampleSummary').textContent = 'Indicator layer hidden';
+      $('sampleDetail').textContent = 'Turn on Show layer to display the model estimates.';
+    }
     return;
   }
-  if (!state.samples) return;
-  let available = 0;
   const previousView = state.sampleViewport !== viewportKey();
+  state.surfaceLayer?.setField(state.field, { metric: state.metric, mode: state.renderMode, cellSize: state.pixelSize,
+    opacity: state.opacity * (previousView ? .45 : 1) });
+  const canvasAvailable = state.surfaceLayer?.available();
+  const size = state.map.getSize(), side = state.field?.size ?? 9;
+  const strideX = Math.max(1, Math.ceil((side - 1) * 96 / Math.max(size.x, 1)));
+  const strideY = Math.max(1, Math.ceil((side - 1) * 60 / Math.max(size.y, 1)));
+  let available = 0;
   for (const point of state.samples.points) {
-    const value = point.values[state.metric], valid = isNumber(value);
-    if (valid) available++;
-    const color = metricColor(value, state.metric);
-    if (point.bounds) {
-      window.L.rectangle(point.bounds, {
-        className: 'layer-cell', color: valid ? color : '#7d8c96', weight: .6,
-        opacity: .3, fillColor: color, fillOpacity: valid ? state.opacity * (previousView ? .45 : 1) : 0,
-        dashArray: valid ? null : '4 4', bubblingMouseEvents: true,
-      }).bindTooltip(sampleTooltip(point), { sticky: true, className: 'sample-tooltip' }).addTo(state.samplesLayer);
+    const value = point.values[state.metric];
+    if (isNumber(value)) available++;
+    const pointsOnly = state.renderMode === 'samples' || !canvasAvailable;
+    if (!state.showValues && state.metric !== 'wind' && !pointsOnly) continue;
+    if (point.col % strideX || point.row % strideY) continue;
+    let content;
+    if (state.showValues) content = markerContent(value, false, point.direction);
+    else if (state.metric === 'wind' && isNumber(value) && value > 0 && isNumber(point.direction)) {
+      content = markerContent(value, false, point.direction);
+      content.className = 'wind-vector';
+      const arrow = content.querySelector('.wind-arrow'); content.replaceChildren(arrow);
+    } else {
+      content = element('div', 'sample-dot'); content.style.backgroundColor = metricColor(value, state.metric);
     }
-    if (!state.showValues) continue;
-    const label = `${METRICS[state.metric].label}: ${unitText(value, ` ${METRICS[state.metric].unit}`, state.metric === 'rain' ? 1 : 0)} · ${coordinateLabel(point.lat, point.lon)}`;
+    const label = `${METRICS[state.metric].label}: ${unitText(value, ` ${METRICS[state.metric].unit}`, state.metric === 'rain' ? 1 : 0)} · source sample · ${coordinateLabel(point.lat, point.lon)}`;
     const marker = window.L.marker([point.lat, point.displayLon ?? point.lon], {
-      icon: window.L.divIcon({ html: markerContent(value, false, point.direction), className: 'climate-marker sample-marker', iconSize: [64, 38], iconAnchor: [32, 19] }),
+      icon: window.L.divIcon({ html: content, className: 'climate-marker sample-marker', iconSize: state.showValues ? [64, 38] : [24, 24], iconAnchor: state.showValues ? [32, 19] : [12, 12] }),
       keyboard: true, title: label, alt: label, opacity: previousView ? .55 : 1,
     }).bindTooltip(sampleTooltip(point), { direction: 'top' }).addTo(state.samplesLayer);
     marker.on('click', () => selectPlace(point, { pan: false }));
   }
   $('clearSamples').hidden = false;
-  $('sampleSummary').textContent = previousView ? 'Previous area · refresh to update' : `${available} of ${state.samples.points.length} estimates available`;
+  const source = state.metric === 'aqi' ? 'CAMS' : 'DWD ICON';
+  const stamps = state.samples.points.map(point => state.metric === 'aqi' ? point.airTime : point.time).filter(isNumber);
+  const modelTime = stamps.length ? `${localTime(Math.min(...stamps), 'UTC', { day: 'numeric', month: 'short' })} UTC` : 'unavailable';
+  const displayedPixel = document.querySelector('.weather-surface')?.dataset.pixelSize || state.pixelSize;
+  $('surfaceResolution').textContent = state.renderMode === 'samples' || !canvasAvailable
+    ? 'Source samples · labels spaced for clarity'
+    : `${displayedPixel} px display · interpolated, not native model resolution`;
+  $('sampleSummary').textContent = previousView ? 'Previous area · refresh to update' : `${available} of ${state.samples.points.length} source estimates · ${source}`;
   $('sampleDetail').textContent = previousView
-    ? (state.autoUpdate ? 'Updating for this view…' : 'Auto-update is paused. Choose Refresh layer.')
-    : `Retrieved ${localTime(state.samples.retrievedAt / 1000, 'UTC')} UTC · ${available ? 'cells show sampled values.' : 'no data for this indicator.'}`;
+    ? (state.autoUpdate ? 'Waiting to update this view…' : 'Auto-update is paused. Choose Refresh layer.')
+    : `${source} valid ${modelTime}${canvasAvailable ? '' : ' · raster unavailable; sample points shown'}`;
 }
 
 function scheduleLayerUpdate() {
   clearTimeout(sampleTimer);
   if (!state.map || !state.autoUpdate || !state.layerVisible) return;
-  sampleTimer = setTimeout(() => sampleView(), Math.max(850, 8000 - (Date.now() - lastSampleStart)));
+  const remaining = Math.max(850, AUTO_LAYER_INTERVAL - (Date.now() - lastSampleStart));
+  if (remaining > 1000 && state.samples) $('sampleDetail').textContent = `Updating this area in about ${Math.ceil(remaining / 1000)} seconds…`;
+  sampleTimer = setTimeout(() => sampleView(), remaining);
 }
 
 function setMetric(metric) {
@@ -214,9 +252,10 @@ function setMetric(metric) {
   $('legendUnit').textContent = spec.unit;
   $('legendGradient').style.background = spec.gradient || `linear-gradient(to right, ${spec.colors.join(',')})`;
   $('legendTicks').replaceChildren(...spec.ticks.map(tick => element('span', '', tick)));
-  $('legendNote').textContent = metric === 'rain' ? 'Preceding hour · rain, showers + snow' : metric === 'wind' ? 'Arrows show air movement · at 10 m' : metric === 'aqi' ? 'CAMS model · 16 sampled locations' : '16 model samples · display cells';
+  $('legendNote').textContent = metric === 'rain' ? 'Preceding hour · rain, showers + snow' : metric === 'wind' ? 'Arrows show air movement · at 10 m' : metric === 'aqi' ? 'CAMS · interpolated AQI' : 'DWD ICON · interpolated display';
   updateSelectedMarker();
   renderSamples();
+  updateZoomEarthLink();
 }
 
 async function sampleView({ force = false } = {}) {
@@ -228,16 +267,17 @@ async function sampleView({ force = false } = {}) {
   $('sampleButton').disabled = true;
   $('sampleButtonLabel').textContent = 'Loading…';
   $('sampleSummary').textContent = 'Loading the indicator layer';
-  $('sampleDetail').textContent = 'Fetching 16 model estimates for the visible area.';
+  $('sampleDetail').textContent = 'Fetching 81 source estimates for a finer surface.';
   try {
-    const points = sampleCells({ south: bounds.getSouth(), north: bounds.getNorth(), west: bounds.getWest(), east: bounds.getEast() });
+    const points = surfaceSampleGrid({ south: bounds.getSouth(), north: bounds.getNorth(), west: bounds.getWest(), east: bounds.getEast() });
     const result = await client.samples(points, { signal: ticket.signal, force });
     if (!sampleRequest.isCurrent(ticket) || sampledViewport !== viewportKey()) return;
     state.samples = result;
+    state.field = createField(result.points);
     state.sampleViewport = sampledViewport;
     renderSamples();
     if (result.partial) toast('Some indicator data is unavailable. Missing values are left unfilled.');
-    $('announcer').textContent = 'Sixteen model estimates loaded. Switch indicators, adjust opacity, or inspect a value.';
+    $('announcer').textContent = 'Fine weather surface loaded. Choose Smooth, Fine cells or Sample points; change display detail without more downloads.';
   } catch (error) {
     if (!sampleRequest.isCurrent(ticket)) return;
     $('sampleSummary').textContent = state.samples ? 'Previous layer retained' : 'Layer could not load';
@@ -335,6 +375,7 @@ async function selectPlace(place, { pan = true, force = false } = {}) {
   const ticket = pointRequest.begin();
   state.place = { ...place, lat: Number(place.lat.toFixed(4)), lon: Number(normalizeLongitude(place.lon).toFixed(4)), name: String(place.name || 'Selected point').slice(0, 80) };
   state.data = null;
+  updateZoomEarthLink();
   clearConditions();
   closeSearch();
   if (pan && state.map) state.map.setView([state.place.lat, state.place.lon], Math.max(state.map.getZoom(), 9), { animate: !matchMedia('(prefers-reduced-motion: reduce)').matches });
@@ -642,6 +683,15 @@ function setupInteractions() {
     state.layerVisible = true; $('layerVisible').checked = true;
     sampleView({ force: true });
   });
+  $('surfaceMode').addEventListener('change', event => {
+    state.renderMode = ['smooth', 'grid', 'samples'].includes(event.target.value) ? event.target.value : 'smooth';
+    $('pixelSize').disabled = state.renderMode === 'samples';
+    renderSamples();
+  });
+  $('pixelSize').addEventListener('change', event => {
+    state.pixelSize = [1, 2, 4, 8, 12].includes(Number(event.target.value)) ? Number(event.target.value) : 2;
+    renderSamples();
+  });
   $('layerOpacity').addEventListener('input', event => {
     state.opacity = clamp(Number(event.target.value) / 100, .1, .85);
     $('opacityValue').textContent = `${Math.round(state.opacity * 100)}%`;
@@ -663,7 +713,8 @@ function setupInteractions() {
     if (state.samples) renderSamples();
   });
   $('clearSamples').addEventListener('click', () => {
-    clearTimeout(sampleTimer); sampleRequest.cancel(); state.samples = null; state.samplesLayer?.clearLayers();
+    clearTimeout(sampleTimer); sampleRequest.cancel(); state.samples = null; state.field = null; state.samplesLayer?.clearLayers(); state.surfaceLayer?.setField(null);
+    $('mapReadout').textContent = 'Move over the map to inspect · click for a point forecast';
     state.autoUpdate = false; $('autoUpdate').checked = false;
     $('clearSamples').hidden = true; $('sampleButton').disabled = !state.map;
     $('sampleButtonLabel').textContent = 'Refresh layer'; $('sampleSummary').textContent = 'Layer cleared';

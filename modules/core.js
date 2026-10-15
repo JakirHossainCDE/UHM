@@ -6,9 +6,9 @@ export const PRESETS = [
 ];
 
 export const METRICS = {
-  temperature: { label: 'Air temperature', short: 'Temperature', unit: '°C', min: -10, max: 40, colors: ['#6f9ac6', '#91c5c6', '#d6dfae', '#edba77', '#d77462'], ticks: ['−10°', '15°', '40°+'] },
-  humidity: { label: 'Relative humidity', short: 'Humidity', unit: '%', min: 0, max: 100, colors: ['#efe1b1', '#c6d8ad', '#95c9b5', '#6baea9', '#6692ad'], ticks: ['0%', '50%', '100%'] },
-  wind: { label: 'Wind at 10 m', short: 'Wind', unit: 'km/h', min: 0, max: 60, colors: ['#cfe0ce', '#aad0ce', '#83b6c9', '#8b9fca', '#aa8cba'], ticks: ['0', '30', '60+'] },
+  temperature: { label: 'Air temperature', short: 'Temperature', unit: '°C', min: -30, max: 45, colors: ['#51449c', '#5267c7', '#429fc3', '#55bdaa', '#9ccf83', '#e4d869', '#efa552', '#de6247', '#aa354c'], ticks: ['−30°', '7.5°', '45°+'] },
+  humidity: { label: 'Relative humidity', short: 'Humidity', unit: '%', min: 0, max: 100, colors: ['#dfc080', '#9dcc96', '#55b9ba', '#428bb5', '#6452a5'], ticks: ['0%', '50%', '100%'] },
+  wind: { label: 'Wind at 10 m', short: 'Wind', unit: 'km/h', min: 0, max: 60, colors: ['#74baad', '#49a9bb', '#5479bd', '#9b61b0', '#d56884'], ticks: ['0', '30', '60+'] },
   rain: { label: 'Hourly precipitation', short: 'Rain', unit: 'mm', min: 0, max: 10, colors: ['#eff5ed', '#9ed9c9', '#5aacc7', '#5678cb', '#9455ae'], ticks: ['0', '5', '10+'] },
   aqi: { label: 'U.S. Air Quality Index', short: 'Air quality', unit: 'AQI', min: 0, max: 500, colors: ['#a8c99b', '#e2d183', '#e6aa76', '#d98179', '#b396bb', '#c8869e'], ticks: ['0', '250', '500+'], gradient: 'linear-gradient(to right,#a8c99b 0% 10%,#e2d183 10% 20%,#e6aa76 20% 30%,#d98179 30% 40%,#b396bb 40% 60%,#c8869e 60% 100%)' },
 };

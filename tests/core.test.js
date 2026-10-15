@@ -67,8 +67,8 @@ test('wind directions wrap safely', () => {
   assert.equal(c.windDirection(360), 'N'); assert.equal(c.windDirection(-45), 'NW'); assert.equal(c.windDirection(null), '—');
 });
 test('colour scales clamp extremes and show missing values separately', () => {
-  assert.equal(c.metricColor(-100), c.metricColor(-10));
-  assert.equal(c.metricColor(100), c.metricColor(40));
+  assert.equal(c.metricColor(-100), c.metricColor(c.METRICS.temperature.min));
+  assert.equal(c.metricColor(100), c.metricColor(c.METRICS.temperature.max));
   assert.notEqual(c.metricColor(null), c.metricColor(0));
   assert.match(c.metricColor(25), /^rgb\(/);
 });

@@ -24,6 +24,13 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
   Object.defineProperties(document.getElementById('map'), { clientWidth: { value: 780 }, clientHeight: { value: 460 } });
   window.matchMedia = media;
   window.eval(await readFile(new URL('../vendor/leaflet/leaflet.js', import.meta.url), 'utf8'));
+  let rasterWrites = 0, lastRaster;
+  // DOM simulation does not include a renderer. Capture the actual raster bytes
+  // passed to canvas; the interpolation and projection are separately unit tested.
+  window.HTMLCanvasElement.prototype.getContext = function () { return {
+    createImageData: (width,height) => ({ width, height, data: new Uint8ClampedArray(width * height * 4) }),
+    putImageData: pixels => { rasterWrites++; lastRaster = pixels; },
+  }; };
   let map;
   const leafletMap = window.L.map;
   window.L.map = (...args) => { map = leafletMap(...args); return map; };
@@ -91,39 +98,52 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
       assert.equal($('legendUnit').textContent, 'km/h'); assert.equal(calls.length, count);
       click('[data-metric=temperature]');
     });
-    await t.test('indicator layers draw sixteen sample cells and values, with working display controls', async () => {
+    await t.test('fine surfaces render all metrics with working style, density and opacity controls', async () => {
       $('sampleButton').click(); await settle(() => !$('sampleButton').disabled);
-      assert.equal(document.querySelectorAll('.climate-marker').length, 17);
-      assert.equal(document.querySelectorAll('.layer-cell').length, 16);
-      assert.match($('sampleSummary').textContent, /16 of 16/);
-      const count = calls.length; click('[data-metric=aqi]'); assert.equal(calls.length, count);
+      const canvas = document.querySelector('.weather-surface');
+      assert.equal(canvas.hidden, false); assert.equal(canvas.dataset.pixelSize, '1');
+      assert.equal(document.querySelectorAll('.layer-cell').length, 0, 'Large rectangle grid removed');
+      assert.equal(document.querySelectorAll('.sample-marker').length, 0, 'Labels hidden initially to keep the map clear');
+      assert.match($('sampleSummary').textContent, /81 of 81/);
+      assert(lastRaster.data.some((value,i) => i % 4 === 3 && value > 0), 'Canvas receives nonempty, model-driven pixels');
       const callsBefore = calls.length;
       for (const [metric, unit] of [['temperature','°C'], ['humidity','%'], ['wind','km/h'], ['rain','mm'], ['aqi','AQI']]) {
-        click(`[data-metric=${metric}]`);
-        assert.equal($('legendUnit').textContent, unit);
-        assert.equal(document.querySelectorAll('.layer-cell').length, 16);
+        click(`[data-metric=${metric}]`); assert.equal($('legendUnit').textContent, unit);
+        assert.equal(canvas.dataset.surfaceMetric, metric); assert.equal(canvas.hidden, false);
         if (metric === 'wind') {
-          assert.equal(document.querySelectorAll('.sample-marker .wind-arrow').length, 16);
-          assert.equal(document.querySelector('.wind-arrow').style.getPropertyValue('--wind-rotation'), '225deg');
+          assert(document.querySelectorAll('.wind-vector .wind-arrow').length > 0);
+          assert.equal(document.querySelector('.wind-vector .wind-arrow').style.getPropertyValue('--wind-rotation'), '225deg');
         }
-        if (metric === 'rain') assert.match(document.querySelector('.sample-marker').textContent, /1\.2mm/);
       }
-      assert.equal(calls.length, callsBefore, 'Switching all five layers reuses loaded values');
+      click('[data-metric=rain]'); $('showValues').checked = true; $('showValues').dispatchEvent(new window.Event('change'));
+      assert.match(document.querySelector('.sample-marker').textContent, /1\.2mm/);
+      assert.equal(calls.length, callsBefore, 'Switching indicators must reuse loaded data');
+      $('pixelSize').value = '4'; $('pixelSize').dispatchEvent(new window.Event('change'));
+      assert.equal(canvas.width, 195); assert.equal(canvas.height, 115);
+      $('surfaceMode').value = 'grid'; $('surfaceMode').dispatchEvent(new window.Event('change'));
+      assert.equal(canvas.style.imageRendering, 'pixelated');
+      const paints = rasterWrites;
       $('layerOpacity').value = '75'; $('layerOpacity').dispatchEvent(new window.Event('input'));
-      assert.equal($('opacityValue').textContent, '75%');
-      assert.equal(document.querySelector('.layer-cell').getAttribute('fill-opacity'), '0.75');
+      assert.equal(canvas.style.opacity, '0.75'); assert.equal(rasterWrites, paints, 'Opacity should not recompute the raster');
+      assert.equal(calls.length, callsBefore);
+      $('surfaceMode').value = 'samples'; $('surfaceMode').dispatchEvent(new window.Event('change'));
+      assert.equal(canvas.hidden, true); assert.equal($('pixelSize').disabled, true);
+      $('surfaceMode').value = 'smooth'; $('surfaceMode').dispatchEvent(new window.Event('change'));
       $('showValues').checked = false; $('showValues').dispatchEvent(new window.Event('change'));
-      assert.equal(document.querySelectorAll('.sample-marker').length, 0);
-      assert.equal(document.querySelectorAll('.layer-cell').length, 16);
-      $('layerVisible').checked = false; $('layerVisible').dispatchEvent(new window.Event('change'));
-      assert.equal(document.querySelectorAll('.layer-cell').length, 0);
-      $('layerVisible').checked = true; $('layerVisible').dispatchEvent(new window.Event('change'));
-      assert.equal(document.querySelectorAll('.layer-cell').length, 16);
-      $('showValues').checked = true; $('showValues').dispatchEvent(new window.Event('change'));
-      $('clearSamples').click(); assert.equal(document.querySelectorAll('.climate-marker').length, 1);
-      assert.equal(document.querySelectorAll('.layer-cell').length, 0);
-      assert.equal($('autoUpdate').checked, false);
+      assert.equal(canvas.hidden, false); assert.equal(document.querySelectorAll('.sample-marker').length, 0);
+      $('layerVisible').checked = false; $('layerVisible').dispatchEvent(new window.Event('change')); assert.equal(canvas.hidden, true);
+      $('layerVisible').checked = true; $('layerVisible').dispatchEvent(new window.Event('change')); assert.equal(canvas.hidden, false);
+      $('clearSamples').click(); assert.equal(canvas.hidden, true); assert.equal($('autoUpdate').checked, false);
       click('[data-metric=temperature]');
+    });
+    await t.test('hover inspection and Zoom Earth links use the selected place and layer', async () => {
+      $('sampleButton').click(); await settle(() => !$('sampleButton').disabled);
+      map.fire('mousemove', { latlng: map.getCenter() }); assert.match($('mapReadout').textContent, /interpolated/);
+      click('[data-metric=humidity]'); assert.match($('zoomEarthLink').href, /zoom\.earth\/maps\/humidity/);
+      assert.match($('zoomEarthLink').href, /23\.810,90\.413/);
+      click('[data-metric=aqi]'); assert.equal($('zoomEarthLink').hidden, true);
+      click('[data-metric=temperature]'); assert.equal($('zoomEarthLink').hidden, false);
+      $('clearSamples').click();
     });
     await t.test('moving the map aborts stale layer loads; auto-update refreshes only the latest view', async () => {
       holdSamples = true; $('sampleButton').click();
@@ -131,19 +151,19 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
       map.setView([35, 105], 7);
       holdSamples = false; pendingSamples.splice(0).forEach(resolve => resolve());
       await delay(15);
-      assert.equal(document.querySelectorAll('.layer-cell').length, 0, 'Old viewport response must not draw');
+      assert.equal(document.querySelector('.weather-surface').hidden, true, 'Old viewport response must not draw');
       assert.equal($('sampleButton').disabled, false);
       const count = calls.length;
       map.setView([36, 106], 7);
       await delay(30); assert.equal(calls.length, count, 'Paused auto-update must not request');
-      const now = Date.now; Date.now = () => now() + 9000;
+      const now = Date.now; Date.now = () => now() + 21000;
       try {
         $('autoUpdate').checked = true; $('autoUpdate').dispatchEvent(new window.Event('change'));
         map.setView([37, 107], 7); map.setView([38, 108], 7);
         await delay(1000);
-        await settle(() => document.querySelectorAll('.layer-cell').length === 16);
+        await settle(() => !document.querySelector('.weather-surface').hidden);
         assert.equal(calls.length, count + 2, 'Rapid pans should produce one batched weather/air pair');
-        assert.match($('sampleSummary').textContent, /16 of 16/);
+        assert.match($('sampleSummary').textContent, /81 of 81/);
       } finally { Date.now = now; }
       $('clearSamples').click();
     });

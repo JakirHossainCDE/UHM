@@ -19,12 +19,17 @@ weather and air quality, developed from the Urban Heat Mapping project by
   humidity, wind, rain probability, U.S. AQI and PM₂.₅. Model timestamps and
   retrieval times are separate; each place uses its own timezone.
 - **Explore five indicator layers:** temperature (°C), humidity (%), wind
-  (km/h with direction arrows), hourly precipitation (mm), and U.S. AQI. A 4 × 4
-  display grid shows 16 real model samples. Each cell represents its centre
-  sample, not a native model pixel or an interpolated surface.
-- **Control the map:** adjust layer opacity, hide values or the overlay, pause
-  automatic updates, refresh the layer, and hide the weather/forecast panels.
-  Hover a cell for all five values; click a value for its location forecast.
+  (km/h with direction arrows), hourly precipitation (mm), and U.S. AQI. An
+  edge-to-edge 9 × 9 set of 81 model samples replaces the old large blocks.
+  Smooth surface and Fine cells interpolate between the samples; Sample points
+  displays the source estimates. Display detail ranges from 1 to 12 pixels,
+  with an automatic performance limit on large screens.
+- **Control the map:** adjust layer opacity, show sample values, hide the overlay,
+  pause automatic updates, refresh the layer, and hide the weather/forecast panels.
+  Hover the map for an interpolated value, inspect source markers for all five
+  readings, or click a location for its point forecast. Style and detail controls
+  reuse downloaded data. Compare the selected place in Zoom Earth's external
+  ICON map using the matching temperature, humidity, wind or precipitation link.
 - **Look ahead:** an interactive 24-hour temperature / rain chart, an accessible
   hourly data table and seven-day forecasts.
 - **Compare places:** add up to three locations, inspect their snapshots, refresh
@@ -49,9 +54,18 @@ probability as a separate percentage. Wind arrows point toward the direction
 the air moves (weather-service direction describes where it comes from). Satellite
 imagery is a contextual basemap, not live imagery or land-surface temperature.
 Nearby requested points can resolve to the same weather model cell. Zooming the
-map does not increase meteorological resolution.
+map or selecting a smaller display pixel does not increase meteorological resolution.
+The raster uses bilinear interpolation in geographic coordinates and is drawn
+in Web Mercator to align with the basemap. It leaves missing source values,
+conflicting timestamps and areas outside the loaded samples unfilled. Wind arrows
+show source vectors; only wind speed is interpolated. AQI category colours apply
+to the rounded interpolated index. Opacity can be reduced to see map labels.
 
-Weather comes from [Open-Meteo](https://open-meteo.com/en/docs). Air quality uses
+Map weather comes from [DWD ICON through Open-Meteo](https://open-meteo.com/en/docs/dwd-api),
+with approximate native resolutions of 11 km globally, 7 km in Europe and 2 km
+in parts of Central Europe. Sampling can be much coarser when viewing a large
+region. Selected-point cards and forecasts use Open-Meteo's best-match models,
+so their values can differ from the ICON map. Air quality uses
 [CAMS forecasts through Open-Meteo](https://open-meteo.com/en/docs/air-quality-api)
 (approximately 11 km in Europe and 45 km globally). Values are estimates, may be
 delayed, and are not official warnings or safety-critical guidance.
@@ -70,9 +84,11 @@ processing backend should not be read as features of the current static website.
 - Only the colour-theme preference is stored in local storage. Comparisons and
   weather caches are in memory, not a server or persistent location history.
 - Point requests are cached for ten minutes, with an explicit refresh button.
-  Layer requests batch 16 locations, load initially, and update after map
-  movements settle (850 ms debounce, at least 8 seconds between automatic
-  batches). Each area is cached for ten minutes. Indicator switches reuse all
+  Layer requests batch 81 locations into one ICON and one CAMS request, load
+  initially, and update after map movements settle (850 ms debounce, at least
+  20 seconds between automatic batches). Each area is cached for ten minutes.
+  Multi-location requests count toward provider usage limits per location.
+  Each batch requests only one weather hour and current AQI. Indicator switches reuse all
   five loaded values; Refresh layer bypasses the cache. Auto-update can be
   paused. No background time-based polling or tile prefetching is used.
 - The layer uses the viewport at request time; panning cancels that request.
@@ -121,8 +137,10 @@ Coverage includes null handling, timezones and DST, AQI boundaries, coordinate
 validation, dateline sampling, CSV injection protection, cancellation, caching,
 provider failures, search, themes, basemaps, comparison, forecast navigation,
 GPS permission failures, sharing, CSV download, display-cell boundaries,
-layer visibility and opacity, all five metrics, wind direction, precipitation
-units, automatic updates and stale viewport cancellation. These are **not visual browser
+bilinear interpolation, Mercator projection, missing-data masks, AQI raster
+boundaries, pixel budgets, layer visibility and opacity, all five metrics,
+wind direction, precipitation units, automatic updates and stale viewport
+cancellation. These are **not visual browser
 tests**. Before significant future releases, also inspect desktop and mobile
 layouts in real browsers, test keyboard navigation, native GPS permission and
 touch gestures on a device, and check external-provider availability.
@@ -136,6 +154,8 @@ touch gestures on a device, and check external-provider availability.
 | `script.js` | DOM, Leaflet map and interaction orchestration |
 | `modules/core.js` | Pure validation, time, chart, colour, CSV and request-guard helpers |
 | `modules/api.js` | Provider requests, timeouts, batching, caching and normalisation |
+| `modules/surface.js` | Source lattice, interpolation, Mercator raster and comparison URLs |
+| `modules/surface-layer.js` | Leaflet canvas overlay, display modes and raster reuse |
 | `assets/mark.svg` | Original UHM contour-style mark |
 | `vendor/leaflet/` | Pinned local Leaflet 1.9.4 distribution and licence |
 | `tests/` | Deterministic unit and DOM integration tests |
@@ -162,3 +182,5 @@ The original project declares distribution under the **GNU General Public
 License v3.0**; that declaration is retained. See
 [third-party notices](THIRD_PARTY_NOTICES.md) for Leaflet and external data sources.
 Data, maps and imagery remain subject to their respective providers' licences.
+Zoom Earth is linked for comparison only. Its tiles, images and code are not
+embedded or redistributed, and UHM is not affiliated with Zoom Earth.
