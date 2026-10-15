@@ -1,6 +1,6 @@
 {
-  "name": "uhm-urban-climate-explorer",
-  "version": "2.2.0",
+  "name": "wex-weather-environment-explorer",
+  "version": "2.3.0",
   "private": true,
   "type": "module",
   "description": "A buildless, accessible urban weather and air-quality explorer.",

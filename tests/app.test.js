@@ -20,7 +20,18 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
     timers.add(timer);
     return timer;
   });
-  const media = query => ({ matches: query.includes('reduced-motion'), addEventListener() {}, removeEventListener() {} });
+  const mediaQueries = new Map();
+  const media = query => {
+    if (!mediaQueries.has(query)) {
+      const listeners = new Set();
+      mediaQueries.set(query, { matches: query.includes('reduced-motion'),
+        addEventListener: (_event, listener) => listeners.add(listener),
+        removeEventListener: (_event, listener) => listeners.delete(listener),
+        change(matches) { this.matches = matches; listeners.forEach(listener => listener({ matches })); },
+      });
+    }
+    return mediaQueries.get(query);
+  };
   Object.defineProperties(document.getElementById('map'), { clientWidth: { value: 780 }, clientHeight: { value: 460 } });
   window.matchMedia = media;
   window.eval(await readFile(new URL('../vendor/leaflet/leaflet.js', import.meta.url), 'utf8'));
@@ -78,8 +89,8 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
       points[0].dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
       assert.equal(points[1].getAttribute('tabindex'), '0'); assert.match($('chartReadout').textContent, /Rain/);
     });
-    await t.test('theme preference switches between free light and dark maps', () => {
-      $('themeToggle').click(); assert.equal(document.documentElement.dataset.theme, 'dark'); assert.equal(localStorage.getItem('uhm-theme'), 'dark');
+    await t.test('theme preference switches between light and dark maps', () => {
+      $('themeToggle').click(); assert.equal(document.documentElement.dataset.theme, 'dark'); assert.equal(localStorage.getItem('wex-theme'), 'dark');
       assert.match($('themeToggle').getAttribute('aria-label'), /light/);
       assert.equal($('map').dataset.basemap, 'dark');
       assert.equal($('basemapSelect').value, 'dark');
@@ -99,6 +110,11 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
       click('[data-metric=temperature]');
     });
     await t.test('fine surfaces render all metrics with working style, density and opacity controls', async () => {
+      assert($('mapConsole').contains($('basemapSelect')) && $('mapConsole').contains($('metricControls')), 'Map tools and layers belong to one panel');
+      assert.equal($('layerSettingsPanel').hidden, true);
+      $('settingsToggle').click();
+      assert.equal($('layerSettingsPanel').hidden, false);
+      assert.equal($('settingsToggle').getAttribute('aria-expanded'), 'true');
       $('sampleButton').click(); await settle(() => !$('sampleButton').disabled);
       const canvas = document.querySelector('.weather-surface');
       assert.equal(canvas.hidden, false); assert.equal(canvas.dataset.pixelSize, '1');
@@ -126,6 +142,13 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
       $('layerOpacity').value = '75'; $('layerOpacity').dispatchEvent(new window.Event('input'));
       assert.equal(canvas.style.opacity, '0.75'); assert.equal(rasterWrites, paints, 'Opacity should not recompute the raster');
       assert.equal(calls.length, callsBefore);
+      $('layerOpacity').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      assert.equal($('layerSettingsPanel').hidden, true);
+      assert.equal($('settingsToggle').getAttribute('aria-expanded'), 'false');
+      assert.equal(document.activeElement, $('settingsToggle'));
+      $('settingsToggle').click();
+      assert.equal($('pixelSize').value, '4'); assert.equal($('layerOpacity').value, '75');
+      assert.equal(calls.length, callsBefore, 'Opening settings must not reload map data');
       $('surfaceMode').value = 'samples'; $('surfaceMode').dispatchEvent(new window.Event('change'));
       assert.equal(canvas.hidden, true); assert.equal($('pixelSize').disabled, true);
       $('surfaceMode').value = 'smooth'; $('surfaceMode').dispatchEvent(new window.Event('change'));
@@ -134,7 +157,42 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
       $('layerVisible').checked = false; $('layerVisible').dispatchEvent(new window.Event('change')); assert.equal(canvas.hidden, true);
       $('layerVisible').checked = true; $('layerVisible').dispatchEvent(new window.Event('change')); assert.equal(canvas.hidden, false);
       $('clearSamples').click(); assert.equal(canvas.hidden, true); assert.equal($('autoUpdate').checked, false);
+      $('settingsToggle').click();
       click('[data-metric=temperature]');
+    });
+    await t.test('wind motion follows loaded vectors, pauses safely and respects reduced motion', async () => {
+      $('sampleButton').click(); await settle(() => !$('sampleButton').disabled);
+      const count = calls.length, preference = media('(prefers-reduced-motion: reduce)');
+      assert.equal($('windMotionToggle').disabled, true);
+      assert.equal(document.querySelectorAll('.is-animated').length, 0, 'Motion never starts automatically');
+      preference.change(false);
+      assert.equal($('windMotionToggle').disabled, false);
+      $('windMotionToggle').click();
+      assert.equal($('legendUnit').textContent, 'km/h');
+      assert.equal($('windMotionToggle').getAttribute('aria-pressed'), 'true');
+      const arrow = document.querySelector('.is-animated .wind-arrow');
+      assert(arrow); assert.equal(arrow.style.getPropertyValue('--wind-rotation'), '225deg');
+      assert.equal(arrow.parentElement.style.getPropertyValue('--wind-duration'), '3.43s');
+      assert.match($('legendNote').textContent, /not a time forecast/);
+      assert.equal(calls.length, count, 'Animation uses loaded values without network requests');
+      Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+      document.dispatchEvent(new window.Event('visibilitychange'));
+      assert(document.documentElement.classList.contains('motion-paused'));
+      Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+      document.dispatchEvent(new window.Event('visibilitychange'));
+      assert(!document.documentElement.classList.contains('motion-paused'));
+      $('windMotionToggle').click(); assert.equal(document.querySelectorAll('.is-animated').length, 0);
+      $('windMotionToggle').click(); click('[data-metric=temperature]');
+      assert.equal($('windMotionToggle').getAttribute('aria-pressed'), 'false');
+      $('windMotionToggle').click(); preference.change(true);
+      assert.equal(document.querySelectorAll('.is-animated').length, 0);
+      assert.equal($('windMotionToggle').disabled, true);
+      assert.equal($('windMotionLabel').textContent, 'Motion off');
+      preference.change(false); $('windMotionToggle').click();
+      $('clearSamples').click();
+      assert.equal($('windMotionToggle').disabled, true);
+      assert.equal(document.querySelectorAll('.is-animated').length, 0);
+      preference.change(true); click('[data-metric=temperature]');
     });
     await t.test('hover inspection and Zoom Earth links use the selected place and layer', async () => {
       $('sampleButton').click(); await settle(() => !$('sampleButton').disabled);
@@ -234,11 +292,11 @@ test('application interaction flows with real Leaflet and a simulated DOM', asyn
       $('shareDialog').close(); assert.equal(document.body.style.overflow, '');
     });
     await t.test('CSV export contains actual loaded forecast rows and attribution', async () => {
-      $('exportButton').click(); assert.match(download.filename, /^uhm-map-centre-hourly-forecast\.csv$/);
+      $('exportButton').click(); assert.match(download.filename, /^wex-map-centre-hourly-forecast\.csv$/);
       const csv = await download.blob.text(); assert.match(csv, /Open-Meteo/); assert.match(csv, /model_latitude/); assert.equal(csv.split('\r\n').length, 169);
     });
-    await t.test('methodology dialog opens and closes, and retains both authors', () => {
-      click('[data-open-about]'); assert($('aboutDialog').open); assert.match($('aboutDialog').textContent, /Amna Azeem and Md Jakir Hossain/);
+    await t.test('methodology dialog opens and closes, and credits the maintainer', () => {
+      click('[data-open-about]'); assert($('aboutDialog').open); assert.match($('aboutDialog').textContent, /Md Jakir Hossain/);
       $('closeAbout').click(); assert(!$('aboutDialog').open); assert.equal(document.body.style.overflow, '');
     });
     await t.test('offline state is explicit and clears on reconnect', () => {

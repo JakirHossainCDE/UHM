@@ -1,4 +1,4 @@
-import { rasterizeField } from './surface.js?v=2.2.0';
+import { rasterizeField } from './surface.js?v=2.3.0';
 
 /** One bounded canvas, not thousands of SVG rectangles or external tile requests. */
 export function createSurfaceLayer(L) {

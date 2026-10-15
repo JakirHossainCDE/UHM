@@ -1,7 +1,7 @@
 /** Fine display raster over a bounded, regular set of model samples.
  * Interpolation changes presentation, not the native meteorological resolution.
  */
-import { clamp, isNumber, normalizeLongitude, METRICS, metricColor } from './core.js?v=2.2.0';
+import { clamp, isNumber, normalizeLongitude, METRICS, metricColor } from './core.js?v=2.3.0';
 
 export const SAMPLE_SIDE = 9;
 export const MAX_SAMPLES = SAMPLE_SIDE * SAMPLE_SIDE;

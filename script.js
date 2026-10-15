@@ -2,10 +2,10 @@ import {
   PRESETS, METRICS, isNumber, numeric, clamp, normalizeLongitude, formatNumber, locationKey,
   coordinateLabel, parseCoordinates, parseView, shareURL, localTime, dayLabel, condition,
   aqiCategory, windDirection, metricColor, nextHours, chartGeometry, forecastCSV, LatestRequest,
-} from './modules/core.js?v=2.2.0';
-import { createClient } from './modules/api.js?v=2.2.0';
-import { surfaceSampleGrid, createField, interpolateField, zoomEarthURL, AUTO_LAYER_INTERVAL } from './modules/surface.js?v=2.2.0';
-import { createSurfaceLayer } from './modules/surface-layer.js?v=2.2.0';
+} from './modules/core.js?v=2.3.0';
+import { createClient } from './modules/api.js?v=2.3.0';
+import { surfaceSampleGrid, createField, interpolateField, zoomEarthURL, AUTO_LAYER_INTERVAL } from './modules/surface.js?v=2.3.0';
+import { createSurfaceLayer } from './modules/surface-layer.js?v=2.3.0';
 
 const $ = id => document.getElementById(id);
 const all = selector => [...document.querySelectorAll(selector)];
@@ -28,16 +28,17 @@ const icon = name => {
 };
 const unitText = (value, unit = '', digits = 0) => isNumber(value) ? `${formatNumber(value, digits)}${unit}` : '—';
 const initial = parseView(window.location.search);
+const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 const client = createClient();
 const pointRequest = new LatestRequest(), searchRequest = new LatestRequest(), sampleRequest = new LatestRequest();
 const state = {
   place: initial.place, data: null, metric: initial.metric, basemap: initial.basemap,
-  range: 'hourly', map: null, tileLayer: null, selectedMarker: null, samplesLayer: null,
+  range: 'hourly', map: null, tileLayer: null, selectedMarker: null, samplesLayer: null, windMotion: false,
   samples: null, field: null, surfaceLayer: null, renderMode: 'smooth', pixelSize: 1, sampleViewport: '', layerVisible: true, opacity: .62, showValues: false, autoUpdate: true, comparisons: new Map(), searchResults: [], activeResult: -1,
 };
 let toastTimer, searchTimer, sampleTimer, lastSampleStart = 0, selectionRevision = 0;
 let explicitTheme = false;
-try { explicitTheme = ['light', 'dark'].includes(localStorage.getItem('uhm-theme')); } catch { /* Optional preference. */ }
+try { explicitTheme = ['light', 'dark'].includes(localStorage.getItem('wex-theme') || localStorage.getItem('uhm-theme')); } catch { /* Optional preference. */ }
 
 function toast(message) {
   clearTimeout(toastTimer);
@@ -131,7 +132,7 @@ function setupMap() {
 
 function markerContent(value, selected = false, direction = null) {
   const node = element('div', `marker-value${selected ? ' selected' : ''}${!isNumber(value) ? ' missing' : ''}`, formatNumber(value, state.metric === 'rain' ? 1 : 0));
-  if (state.metric === 'wind' && isNumber(direction) && isNumber(value) && value > 0) {
+  if (!selected && state.metric === 'wind' && isNumber(direction) && isNumber(value) && value > 0) {
     const arrow = svgElement('svg', { viewBox: '0 0 14 18', class: 'wind-arrow', 'aria-hidden': 'true' });
     arrow.style.setProperty('--wind-rotation', `${direction + 180}deg`);
     arrow.append(svgElement('path', { d: 'M7 1 L13 9 L8.5 8 L8.5 17 L5.5 17 L5.5 8 L1 9 Z', fill: 'currentColor' }));
@@ -147,7 +148,7 @@ function selectedValue() { return numeric(state.data?.current?.[state.metric ===
 function updateSelectedMarker() {
   if (!state.map) return;
   const value = selectedValue();
-  const markerIcon = window.L.divIcon({ html: markerContent(value, true, state.data?.current?.direction), className: 'climate-marker', iconSize: [68, 46], iconAnchor: [34, 23], tooltipAnchor: [0, -30] });
+  const markerIcon = window.L.divIcon({ html: markerContent(value, true), className: 'climate-marker selected-point-icon', iconSize: [52, 30], iconAnchor: [26, 15], tooltipAnchor: [0, -20] });
   if (!state.selectedMarker) state.selectedMarker = window.L.marker([state.place.lat, state.place.lon], { icon: markerIcon, keyboard: true, zIndexOffset: 1000 }).addTo(state.map);
   else state.selectedMarker.setLatLng([state.place.lat, state.place.lon]).setIcon(markerIcon);
   const label = `${state.place.name} · Point forecast (best match) · ${METRICS[state.metric].label}: ${unitText(value, ` ${METRICS[state.metric].unit}`)}`;
@@ -179,7 +180,26 @@ function updateZoomEarthLink() {
   $('zoomEarthLink').hidden = state.metric === 'aqi';
 }
 
+function syncWindMotion() {
+  const available = state.map && state.sampleViewport === viewportKey() && state.samples?.points.some(point =>
+    isNumber(point.time) && isNumber(point.direction) && isNumber(point.values.wind) && point.values.wind > 0);
+  const disabled = motionPreference.matches || !available;
+  if (disabled) state.windMotion = false;
+  $('windMotionToggle').disabled = Boolean(disabled);
+  $('windMotionToggle').setAttribute('aria-pressed', String(state.windMotion));
+  $('windMotionLabel').textContent = motionPreference.matches ? 'Motion off' : state.windMotion ? 'Pause wind' : 'Play wind';
+  $('windMotionIcon').setAttribute('href', state.windMotion ? '#i-pause' : '#i-play');
+  $('windMotionToggle').title = motionPreference.matches ? 'Your system prefers reduced motion. Static wind arrows remain available.'
+    : !available ? 'Wind movement is unavailable for this area. Refresh the layer to check for data.'
+    : 'Animate wind arrows to show direction and relative speed. This is not a forecast timeline.';
+  if (state.metric === 'wind') $('legendNote').textContent = state.windMotion
+    ? 'Animated direction & relative speed · not a time forecast'
+    : 'Arrows show air movement · at 10 m';
+}
+
 function renderSamples() {
+  if (!state.layerVisible || state.metric !== 'wind' || state.showValues) state.windMotion = false;
+  syncWindMotion();
   if (!state.samplesLayer) return;
   $('mapReadout').textContent = 'Move over the map to inspect · click for a point forecast';
   state.samplesLayer.clearLayers();
@@ -209,14 +229,17 @@ function renderSamples() {
     if (state.showValues) content = markerContent(value, false, point.direction);
     else if (state.metric === 'wind' && isNumber(value) && value > 0 && isNumber(point.direction)) {
       content = markerContent(value, false, point.direction);
-      content.className = 'wind-vector';
+      content.className = `wind-vector${state.windMotion && isNumber(point.time) ? ' is-animated' : ''}`;
+      const duration = clamp(60 / (value + 5), 1, 6);
+      content.style.setProperty('--wind-duration', `${duration.toFixed(2)}s`);
+      content.style.setProperty('--wind-delay', `${(-((point.row * 3 + point.col) % 9) / 9 * duration).toFixed(2)}s`);
       const arrow = content.querySelector('.wind-arrow'); content.replaceChildren(arrow);
     } else {
       content = element('div', 'sample-dot'); content.style.backgroundColor = metricColor(value, state.metric);
     }
     const label = `${METRICS[state.metric].label}: ${unitText(value, ` ${METRICS[state.metric].unit}`, state.metric === 'rain' ? 1 : 0)} · source sample · ${coordinateLabel(point.lat, point.lon)}`;
     const marker = window.L.marker([point.lat, point.displayLon ?? point.lon], {
-      icon: window.L.divIcon({ html: content, className: 'climate-marker sample-marker', iconSize: state.showValues ? [64, 38] : [24, 24], iconAnchor: state.showValues ? [32, 19] : [12, 12] }),
+      icon: window.L.divIcon({ html: content, className: 'climate-marker sample-marker', iconSize: state.showValues ? [56, 28] : [24, 24], iconAnchor: state.showValues ? [28, 14] : [12, 12] }),
       keyboard: true, title: label, alt: label, opacity: previousView ? .55 : 1,
     }).bindTooltip(sampleTooltip(point), { direction: 'top' }).addTo(state.samplesLayer);
     marker.on('click', () => selectPlace(point, { pan: false }));
@@ -661,11 +684,45 @@ function openDialog(dialog) {
 }
 
 function setupInteractions() {
+  const syncConsoleHeight = () => {
+    const height = $('mapConsole').getBoundingClientRect().height;
+    if (height > 0) $('explorer').style.setProperty('--console-height', `${Math.ceil(height)}px`);
+  };
+  $('settingsToggle').addEventListener('click', () => {
+    const expanded = $('layerSettingsPanel').hidden;
+    $('layerSettingsPanel').hidden = !expanded;
+    $('settingsToggle').setAttribute('aria-expanded', String(expanded));
+    syncConsoleHeight();
+  });
+  $('layerSettingsPanel').addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    $('layerSettingsPanel').hidden = true;
+    $('settingsToggle').setAttribute('aria-expanded', 'false');
+    $('settingsToggle').focus();
+    syncConsoleHeight();
+  });
+  if ('ResizeObserver' in window) new window.ResizeObserver(syncConsoleHeight).observe($('mapConsole'));
+  window.addEventListener('resize', syncConsoleHeight);
+  syncConsoleHeight();
+  $('windMotionToggle').addEventListener('click', () => {
+    if ($('windMotionToggle').disabled) return;
+    state.windMotion = !state.windMotion;
+    if (state.windMotion) {
+      state.layerVisible = true; $('layerVisible').checked = true;
+      state.showValues = false; $('showValues').checked = false;
+      setMetric('wind');
+    } else renderSamples();
+  });
+  motionPreference.addEventListener('change', () => { state.windMotion = false; renderSamples(); });
+  const syncMotionVisibility = () => document.documentElement.classList.toggle('motion-paused', document.hidden);
+  document.addEventListener('visibilitychange', syncMotionVisibility);
+  syncMotionVisibility();
   $('themeToggle').addEventListener('click', () => {
     const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = theme;
     explicitTheme = true;
-    try { localStorage.setItem('uhm-theme', theme); } catch { /* Theme still works without storage. */ }
+    try { localStorage.setItem('wex-theme', theme); } catch { /* Theme still works without storage. */ }
     syncTheme();
   });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
@@ -714,6 +771,7 @@ function setupInteractions() {
   });
   $('clearSamples').addEventListener('click', () => {
     clearTimeout(sampleTimer); sampleRequest.cancel(); state.samples = null; state.field = null; state.samplesLayer?.clearLayers(); state.surfaceLayer?.setField(null);
+    state.windMotion = false; syncWindMotion();
     $('mapReadout').textContent = 'Move over the map to inspect · click for a point forecast';
     state.autoUpdate = false; $('autoUpdate').checked = false;
     $('clearSamples').hidden = true; $('sampleButton').disabled = !state.map;
@@ -799,7 +857,7 @@ function setupInteractions() {
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
     const link = element('a'); link.href = url;
     const name = state.place.name.normalize('NFKD').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'selected-place';
-    link.download = `uhm-${name.toLowerCase()}-hourly-forecast.csv`;
+    link.download = `wex-${name.toLowerCase()}-hourly-forecast.csv`;
     document.body.append(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast('Forecast CSV downloaded with timestamps, coordinates and source attribution.');

@@ -25,7 +25,7 @@ bulk tile downloading, offline tile cache or background map prefetching.
 
 The original project report is preserved unmodified.
 The external [Zoom Earth](https://zoom.earth/) comparison links open its own
-website. UHM uses its own interpolation and colour rendering, not Zoom Earth
+website. WEX uses its own interpolation and colour rendering, not Zoom Earth
 tiles, imagery, source code or an unofficial API. No affiliation is implied.
 Light and dark presentation styles are applied only to the OpenStreetMap tile
 pane. Attribution and indicator colours are not filtered. Use complies with the

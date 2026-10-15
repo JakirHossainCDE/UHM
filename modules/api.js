@@ -1,4 +1,4 @@
-import { numeric, normalizeWeather, locationKey, validCoordinates } from './core.js?v=2.2.0';
+import { numeric, normalizeWeather, locationKey, validCoordinates } from './core.js?v=2.3.0';
 
 const WEATHER = 'https://api.open-meteo.com/v1/forecast';
 const ICON = 'https://api.open-meteo.com/v1/dwd-icon';

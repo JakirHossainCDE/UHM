@@ -47,6 +47,6 @@ css.walk(ast, node => { if (node.type === 'Atrule' && node.name === 'media') med
 assert(media.some(value => value.includes('520px')), 'Provide a mobile layout');
 assert(media.some(value => value.includes('prefers-reduced-motion')), 'Respect reduced motion');
 assert(style.includes(':root[data-theme="dark"]'), 'Provide dark theme tokens');
-assert(html.includes('Amna Azeem') && html.includes('Md Jakir Hossain'), 'Preserve original authorship');
+assert(doc.title.startsWith('WEX') && doc.querySelector('.map-footer').textContent.includes('Md Jakir Hossain'), 'Use the current WEX identity and maintainer credit');
 console.log(`Static checks passed: ${ids.length} unique IDs, ${localLinks} local links, valid CSS, labelled controls, responsive and reduced-motion rules.`);
 window.close();
